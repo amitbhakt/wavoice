@@ -1,0 +1,35 @@
+[project]
+name = "wavoice"
+version = "0.1.0"
+description = "One-command WhatsApp Voice AI with Pipecat and automated Cloudflare Quick Tunnels"
+readme = "README.md"
+authors = [
+    { name = "Amit Bhakt", email = "yashubhakt@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "aiohttp>=3.14.5",
+    "fastapi>=0.143.0",
+    "loguru>=0.7.3",
+    "pipecat-ai[google,webrtc]>=1.12.0",
+    "pydantic>=2.14.1",
+    "pydantic-settings>=2.15.0",
+    "python-dotenv>=1.2.4",
+    "rich>=15.0.0",
+    "typer>=0.27.3",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[project.scripts]
+wavoice = "wavoice.cli:cli"
+
+[build-system]
+requires = ["uv_build>=0.12.13,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+]
