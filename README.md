@@ -81,18 +81,51 @@ async def handle_call(transport, call_info):
 
 ## 90-Second Quickstart
 
-### Step 1: Install
+### Step 1: Install & Run
+
+> [!NOTE]
+> `WAVoice` requires **Python 3.12+**. Because default system Python on macOS or Windows may be older (e.g. Python 3.9), we recommend using [`uv`](https://github.com/astral-sh/uv) to automatically handle Python versioning with zero friction.
+
+#### Option A: One-Command Instant Launch (No Install Needed)
+Works across **macOS, Linux, and Windows**:
+```bash
+uvx wavoice init
+```
+*(Automatically provisions Python 3.12+ in an isolated sandbox and launches the setup wizard).*
+
+#### Option B: Global CLI Installation
+```bash
+# macOS / Linux / Windows (Recommended):
+uv tool install wavoice
+
+# Then run from anywhere:
+wavoice init
+```
+
+#### Option C: Standard `pip` (Requires Python $\ge$ 3.12)
+- **macOS / Linux**:
+  ```bash
+  python3.12 -m venv .venv && source .venv/bin/activate
+  pip install wavoice
+  wavoice init
+  ```
+- **Windows (PowerShell / Command Prompt)**:
+  ```powershell
+  py -3.12 -m venv .venv
+  .venv\Scripts\activate
+  pip install wavoice
+  wavoice init
+  ```
+
+#### Option D: From Source
 ```bash
 git clone https://github.com/amitbhakt/wavoice.git
 cd wavoice
 uv sync
-```
-*(Or install via `pip install wavoice`)*
-
-### Step 2: One-Command Setup
-```bash
 uv run wavoice init
 ```
+
+### Step 2: Configure in 90 Seconds
 
 The interactive wizard asks for only 3 credentials:
 1. `WHATSAPP_TOKEN`: Meta System User access token.
