@@ -70,6 +70,16 @@ class Settings(BaseSettings):
         alias="OPENAI_API_KEY",
         description="OpenAI API Key (optional alternative)",
     )
+    dograh_api_key: Optional[str] = Field(
+        default=None,
+        alias="DOGRAH_API_KEY",
+        description="Dograh Cloud API Key (from app.dograh.com/api-keys > 'API Keys' section, NOT Service Key)",
+    )
+    dograh_base_url: str = Field(
+        default="https://api.dograh.com",
+        alias="DOGRAH_BASE_URL",
+        description="Dograh API base URL (defaults to Dograh Cloud)",
+    )
 
     # WebRTC ICE Servers (STUN / TURN)
     stun_server: str = Field(

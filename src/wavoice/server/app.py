@@ -289,7 +289,7 @@ def create_app(
     config: Optional[Settings] = None,
 ) -> FastAPI:
     """Create and configure the FastAPI server."""
-    app = FastAPI(title="wavoice", version="0.1.0", lifespan=lifespan)
+    app = FastAPI(title="wavoice", version="0.2.0", lifespan=lifespan)
     app.state.call_handler = call_handler
     app.state.startup_fn = startup_fn
     app.state.shutdown_fn = shutdown_fn

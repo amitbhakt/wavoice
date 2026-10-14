@@ -1,6 +1,6 @@
 [project]
 name = "wavoice"
-version = "0.1.0"
+version = "0.2.0"
 description = "One-command WhatsApp Voice AI with Pipecat and automated Cloudflare Quick Tunnels"
 readme = "README.md"
 authors = [
@@ -22,6 +22,7 @@ dependencies = [
 
 [project.scripts]
 wavoice = "wavoice.cli:cli"
+wa-voice = "wavoice.cli:cli"
 
 [build-system]
 requires = ["uv_build>=0.12.13,<0.13.0"]

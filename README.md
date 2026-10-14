@@ -240,6 +240,34 @@ if __name__ == "__main__":
 | `wavoice init` | Complete 90-second setup: prompts for 3 credentials, auto-discovers IDs, turns on voice calling, and launches. Pass `--no-telemetry` to opt out of usage metrics. |
 | `wavoice doctor` | Runs diagnostics across Meta credentials, calling status, and 3-tier webhooks. |
 | `wavoice start` | Starts the server, establishes the Cloudflare tunnel, and begins accepting calls. Pass `--no-telemetry` to run with telemetry disabled. |
+| `wavoice dograh setup` | **One-command Dograh Cloud setup**: connects Meta WhatsApp calling, auto-provisions telephony in Dograh Cloud, deploys a ready-to-test sample voice agent, and routes webhooks in <2 mins. |
+
+---
+
+## Dograh Cloud Integration (No-Code Studio)
+
+If you prefer building voice agents visually with **[Dograh](https://dograh.com)** rather than writing Python code, WAVoice can completely automate your Meta and Dograh Cloud setup:
+
+```bash
+# Using uv:
+uv run wavoice dograh setup
+
+# Or using standard pip3:
+pip3 install wavoice
+wavoice dograh setup
+# (or: python3 -m wavoice dograh setup)
+```
+
+In under 30 seconds, this single command:
+1. Validates your Meta token and auto-discovers your Phone Number ID and WABA ID.
+2. Auto-enables WhatsApp Voice Calling on Meta (`calling.status = "ENABLED"`).
+3. Registers the WhatsApp Telephony Configuration in Dograh Cloud (`api.dograh.com`).
+4. Syncs your phone numbers into Dograh.
+5. Deploys and publishes a test voice agent workflow in Dograh with a greeting: *"Hello! You have successfully connected WhatsApp AI calling via Dograh."*
+6. Binds your WhatsApp number to the new agent workflow.
+7. Overrides Meta's webhooks to route incoming calls directly to Dograh Cloud.
+
+When it finishes, you can pick up WhatsApp on your phone, call your business number, and speak directly to your Dograh agent!
 
 ---
 

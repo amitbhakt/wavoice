@@ -28,12 +28,13 @@ wavoice/
 ├── src/
 │   └── wavoice/
 │       ├── __init__.py        # Exports WhatsAppVoiceApp, Settings, settings
-│       ├── cli.py             # Typer CLI ('init', 'doctor', 'start')
+│       ├── cli.py             # Typer CLI ('init', 'doctor', 'start', 'dograh setup')
 │       ├── sdk.py             # WhatsAppVoiceApp SDK & @app.on_call decorator
 │       ├── agents/
 │       │   └── gemini_live.py # Default Gemini 2.0 Flash Multimodal Live pipeline
 │       ├── core/
 │       │   ├── config.py      # Pydantic Settings (.env loader)
+│       │   ├── dograh.py      # Dograh Cloud API client (telephony, sample agent workflow)
 │       │   ├── ice.py         # STUN / TURN server candidate builder
 │       │   ├── lifecycle.py   # In-memory atomic call claim & deduplication
 │       │   ├── meta.py        # Meta Graph API client (auto-discovery, webhooks, voice settings)
@@ -42,7 +43,8 @@ wavoice/
 │           ├── app.py         # FastAPI webhook router & WebRTC dispatcher
 │           └── security.py    # X-Hub-Signature-256 HMAC verification
 └── tests/
-    └── test_wa_voice.py       # Pytest unit tests (HMAC, claim locks, ice servers, cloudflared)
+    ├── test_wavoice.py        # Pytest unit tests (HMAC, claim locks, ice servers, cloudflared)
+    └── test_dograh.py         # Pytest unit tests for Dograh Cloud client & workflow schemas
 ```
 
 ---
@@ -128,6 +130,17 @@ if __name__ == "__main__":
     app.run()
 ```
 
+### Scenario 4: User wants one-command setup for Dograh Cloud
+Instruct them or execute:
+```bash
+uv run wavoice dograh setup
+```
+Prompts for:
+1. `DOGRAH_API_KEY` (from `app.dograh.com/api-keys`)
+2. `WHATSAPP_TOKEN` (Meta System User token)
+3. `WHATSAPP_APP_SECRET`
+WAVoice auto-discovers Meta IDs, enables voice calling, creates the Dograh telephony configuration, syncs phone numbers, creates and publishes a test WhatsApp agent workflow in Dograh, and points Meta webhooks directly to Dograh Cloud in <30s.
+
 ---
 
 ## 5. Running Tests
@@ -136,4 +149,5 @@ Always ensure tests pass before making code modifications:
 ```bash
 uv run pytest
 ```
-Unit tests live in `tests/test_wa_voice.py` and test webhook challenge handshakes, HMAC computation, call dedup claim locks, cloudflared execution, and ICE candidates.
+Unit tests live in `tests/test_wavoice.py` and `tests/test_dograh.py`.
+
