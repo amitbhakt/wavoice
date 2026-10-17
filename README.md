@@ -8,7 +8,22 @@
 > **The zero-friction, one-command pipeline for WhatsApp Voice AI.**  
 > Go from zero to an active AI voice agent answering live WhatsApp calls in under **90 seconds**. No manual Meta dashboard clicking, no ngrok account setup, and no WebRTC configuration required.
 
+<p align="center">
+  <img src="assets/demo.gif" alt="WAVoice 90-Second Demo" width="100%" />
+</p>
+
 Created by [Amit Bhakt](https://github.com/amitbhakt), `WAVoice` solves the hardest part of building WhatsApp voice agents: **the entire telephony and networking plumbing**.
+
+---
+
+## What You Need First
+
+Before running the setup wizard, have these 3 items ready from your [Meta Developer Portal](https://developers.facebook.com):
+
+1. **Meta Developer App** with the WhatsApp product added.
+2. **Meta System User Access Token** with permissions `whatsapp_business_messaging` and `whatsapp_business_management`.
+3. **WhatsApp Business Phone Number** (Meta's free test number works out of the box).
+*(Optional: A Google Gemini API key if you want to use the default native speech-to-speech agent).*
 
 ---
 
@@ -18,11 +33,11 @@ Setting up WhatsApp voice calling traditionally requires hours of manual work: n
 
 **`WAVoice` collapses all of that into a single 90-second command (`wavoice init`):**
 
-1. **Automated Cloudflare Quick Tunnel**: Ephemeral public HTTPS TLS gateway with zero tokens or account sign-ups.
+1. **Automated Cloudflare Quick Tunnel**: Ephemeral public HTTPS TLS gateway with zero tokens or account sign-ups for instant local testing.
 2. **Auto-Discovery**: Extracts your WABA ID and Phone Number ID directly from your token via Meta Graph API.
 3. **Programmatic Calling Activation**: Enables WhatsApp Voice Calling and makes the Call button visible automatically.
 4. **Full 3-Tier Webhook Sync**: Programmatically configures Phone Number overrides, WABA subscriptions, and App subscriptions.
-5. **Production WebRTC Infrastructure**: Pre-configured STUN/TURN, SRTP audio handling, and atomic call claim locks (preventing duplicate webhook deliveries).
+5. **Turnkey WebRTC Plumbing**: Automated STUN/TURN traversal, SRTP audio streaming, and atomic call-claim locks to prevent duplicate webhook delivery.
 
 ---
 
@@ -81,61 +96,26 @@ async def handle_call(transport, call_info):
 
 ## 90-Second Quickstart
 
-### Step 1: Install & Run
-
-> [!NOTE]
-> `WAVoice` requires **Python 3.12+**. Because default system Python on macOS or Windows may be older (e.g. Python 3.9), we recommend using [`uv`](https://github.com/astral-sh/uv) to automatically handle Python versioning with zero friction.
-
-#### Option A: One-Command Instant Launch (No Install Needed)
-Works across **macOS, Linux, and Windows**:
+### 1. Launch Setup
+Run instantly with zero installation (auto-provisions Python 3.12 in an isolated sandbox):
 ```bash
 uvx wavoice init
 ```
-*(Automatically provisions Python 3.12+ in an isolated sandbox and launches the setup wizard).*
-
-#### Option B: Global CLI Installation
+Or install via `pip` (Python 3.12+):
 ```bash
-# macOS / Linux / Windows (Recommended):
-uv tool install wavoice
-
-# Then run from anywhere:
-wavoice init
+pip install wavoice && wavoice init
 ```
 
-#### Option C: Standard `pip` (Requires Python $\ge$ 3.12)
-- **macOS / Linux**:
-  ```bash
-  python3.12 -m venv .venv && source .venv/bin/activate
-  pip install wavoice
-  wavoice init
-  ```
-- **Windows (PowerShell / Command Prompt)**:
-  ```powershell
-  py -3.12 -m venv .venv
-  .venv\Scripts\activate
-  pip install wavoice
-  wavoice init
-  ```
-
-#### Option D: From Source
-```bash
-git clone https://github.com/amitbhakt/wavoice.git
-cd wavoice
-uv sync
-uv run wavoice init
-```
-
-### Step 2: Configure in 90 Seconds
-
-The interactive wizard asks for only 3 credentials:
+### 2. Enter Your 3 Credentials
+The interactive wizard prompts for:
 1. `WHATSAPP_TOKEN`: Meta System User access token.
 2. `WHATSAPP_APP_SECRET`: Meta App Secret.
 3. `GEMINI_API_KEY`: Google Gemini API key.
 
-`WAVoice` automatically discovers your business accounts, activates WhatsApp voice calling, saves `.env`, and starts the server immediately.
+`WAVoice` automatically discovers your WhatsApp Business Account (WABA), checks phone number status, auto-enables WhatsApp Voice Calling, starts an HTTPS ingress tunnel, and registers all 3 tiers of Meta webhooks.
 
-### Step 3: Dial & Talk
-Open WhatsApp on your phone and dial your business number. Your AI agent answers immediately.
+### 3. Dial & Talk
+Open WhatsApp on your phone and place a voice call to your business number. Your AI agent answers immediately with real-time speech!
 
 ---
 
@@ -241,21 +221,19 @@ if __name__ == "__main__":
 | `wavoice doctor` | Runs diagnostics across Meta credentials, calling status, and 3-tier webhooks. |
 | `wavoice start` | Starts the server, establishes the Cloudflare tunnel, and begins accepting calls. Pass `--no-telemetry` to run with telemetry disabled. |
 | `wavoice dograh setup` | **One-command Dograh Cloud setup**: connects Meta WhatsApp calling, auto-provisions telephony in Dograh Cloud, deploys a ready-to-test sample voice agent, and routes webhooks in <2 mins. |
+| `wavoice livekit setup` | **One-command LiveKit Cloud setup**: connects Meta WhatsApp calling, configures webhooks, auto-detects LiveKit credentials, and sets up a LiveKit voice agent. |
+| `wavoice livekit dev` | Starts the LiveKit webhook bridge and launches the bundled LiveKit voice agent. |
+| `wavoice livekit doctor` | Diagnostics check for LiveKit Cloud credentials, connectivity, and Meta WhatsApp voice calling. |
 
 ---
 
-## Dograh Cloud Integration (No-Code Studio)
+## Dograh Cloud Integration (Visual No-Code Studio)
 
-If you prefer building voice agents visually with **[Dograh](https://dograh.com)** rather than writing Python code, WAVoice can completely automate your Meta and Dograh Cloud setup:
+If you prefer building voice agents visually with **[Dograh](https://dograh.com)** rather than writing code, WAVoice completely automates your Meta and Dograh Cloud setup:
 
 ```bash
-# Using uv:
-uv run wavoice dograh setup
-
-# Or using standard pip3:
-pip3 install wavoice
-wavoice dograh setup
-# (or: python3 -m wavoice dograh setup)
+uvx wavoice dograh setup
+# or: pip install wavoice && wavoice dograh setup
 ```
 
 In under 30 seconds, this single command:
@@ -263,11 +241,45 @@ In under 30 seconds, this single command:
 2. Auto-enables WhatsApp Voice Calling on Meta (`calling.status = "ENABLED"`).
 3. Registers the WhatsApp Telephony Configuration in Dograh Cloud (`api.dograh.com`).
 4. Syncs your phone numbers into Dograh.
-5. Deploys and publishes a test voice agent workflow in Dograh with a greeting: *"Hello! You have successfully connected WhatsApp AI calling via Dograh."*
+5. Deploys and publishes a test voice agent workflow in Dograh.
 6. Binds your WhatsApp number to the new agent workflow.
-7. Overrides Meta's webhooks to route incoming calls directly to Dograh Cloud.
+7. Overrides Meta's webhooks to route incoming calls directly to Dograh Cloud's managed infrastructure.
 
-When it finishes, you can pick up WhatsApp on your phone, call your business number, and speak directly to your Dograh agent!
+When it finishes, open WhatsApp on your phone, call your business number, and speak directly to your Dograh visual agent!
+
+---
+
+## LiveKit Cloud Integration (Real-Time Voice AI)
+
+If you are using **[LiveKit](https://livekit.io)** to build low-latency voice agents, WAVoice bridges WhatsApp voice calls directly into LiveKit Cloud rooms with zero manual webhook or telephony setup:
+
+```bash
+# 1. Connect WhatsApp to LiveKit Cloud (interactive wizard)
+uv run wavoice livekit setup
+
+# 2. Launch the bridge & start talking
+uv run wavoice livekit dev
+```
+
+### Highlights:
+- **Ready Out-of-the-Box**: Includes a bundled starter voice agent (`wavoice-agent`) so you can test live calls immediately.
+- **Auto-Detection**: Automatically reads your `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` from `~/.livekit/config.yaml` or parses the 1-click `.env` snippet from the LiveKit Cloud dashboard.
+- **Ingress Flexibility**: Choose between an automated **Cloudflare Quick Tunnel** (zero-config for local dev) or supply your own `--public-url` for staging/production.
+- **LiveKit Insights Ready**: Automatically registers as a named agent (`wavoice-agent`) so call telemetry and room sessions are tracked in your LiveKit Cloud dashboard.
+
+---
+
+## ⚠️ Limitations & Production Deployment
+
+- **Cloudflare Quick Tunnels**: By default, `WAVoice` spins up an automated Cloudflare Quick Tunnel (`trycloudflare.com`). This is designed strictly for **local development, rapid prototyping, and hackathons**—it requires zero account setup, but the tunnel URL is ephemeral and changes whenever the server restarts.
+- **24/7 Production Deployment**:
+  - **Persistent Ingress**: Host your service behind a static domain or reverse proxy (e.g., Caddy, Nginx, or AWS ALB) and pass your permanent URL via `--public-url`:
+    ```bash
+    wavoice start --public-url https://voice.yourdomain.com
+    # or
+    wavoice livekit dev --public-url https://voice.yourdomain.com
+    ```
+  - **With Dograh Cloud**: If you use `wavoice dograh setup`, Meta's webhooks are routed directly to Dograh Cloud's managed production infrastructure, so you don't need any local tunnel or server running at all!
 
 ---
 

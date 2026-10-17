@@ -81,6 +81,28 @@ class Settings(BaseSettings):
         description="Dograh API base URL (defaults to Dograh Cloud)",
     )
 
+    # LiveKit Cloud Credentials
+    livekit_url: Optional[str] = Field(
+        default=None,
+        alias="LIVEKIT_URL",
+        description="LiveKit Cloud Project WebSocket URL (e.g. wss://<project>.livekit.cloud)",
+    )
+    livekit_api_key: Optional[str] = Field(
+        default=None,
+        alias="LIVEKIT_API_KEY",
+        description="LiveKit Project API Key",
+    )
+    livekit_api_secret: Optional[str] = Field(
+        default=None,
+        alias="LIVEKIT_API_SECRET",
+        description="LiveKit Project API Secret",
+    )
+    livekit_agent_name: str = Field(
+        default="wavoice-agent",
+        alias="LIVEKIT_AGENT_NAME",
+        description="Target LiveKit agent name for WhatsApp room dispatch",
+    )
+
     # WebRTC ICE Servers (STUN / TURN)
     stun_server: str = Field(
         default="stun:stun.l.google.com:19302",

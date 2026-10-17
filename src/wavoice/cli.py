@@ -710,6 +710,343 @@ def setup_dograh_alias(
     dograh_setup(api_key=api_key, token=token, secret=secret, base_url=base_url, no_telemetry=no_telemetry)
 
 
+# -------------------------------------------------------------------------
+# LiveKit Cloud WhatsApp Subcommand Group
+# -------------------------------------------------------------------------
+livekit_cli = typer.Typer(
+    name="livekit",
+    help="One-command LiveKit Cloud WhatsApp Voice AI setup and runtime.",
+    add_completion=False,
+)
+cli.add_typer(livekit_cli, name="livekit")
+
+
+@livekit_cli.command(name="setup")
+def livekit_setup(
+    url: Optional[str] = typer.Option(None, "--url", "-u", help="LiveKit Cloud URL (e.g. wss://my-project.livekit.cloud)"),
+    api_key: Optional[str] = typer.Option(None, "--api-key", "-k", help="LiveKit API Key"),
+    api_secret: Optional[str] = typer.Option(None, "--api-secret", "-s", help="LiveKit API Secret"),
+    token: Optional[str] = typer.Option(None, "--token", "-t", help="Meta System User Access Token"),
+    secret: Optional[str] = typer.Option(None, "--secret", help="Meta App Secret"),
+    public_url: Optional[str] = typer.Option(None, "--public-url", "-p", help="Custom public HTTPS URL (skips tunnel)"),
+    launch: bool = typer.Option(False, "--launch", "-l", help="Automatically launch runtime after setup"),
+    no_telemetry: bool = typer.Option(False, "--no-telemetry", help="Opt out of anonymous usage telemetry"),
+):
+    """One-command setup: connects WhatsApp to LiveKit Cloud, configures webhooks, and deploys sample agent."""
+    if no_telemetry:
+        os.environ["WAVOICE_TELEMETRY"] = "false"
+    from wavoice.core.telemetry import track_event
+    track_event("livekit_setup_started")
+
+    console.print(BANNER_HEADER)
+    console.print(
+        Panel.fit(
+            "[bold green]LiveKit Cloud WhatsApp Voice AI Setup[/bold green]\n"
+            "Connect WhatsApp Business to LiveKit Cloud in under 90 seconds.",
+            border_style="green",
+        )
+    )
+
+    from wavoice.providers.livekit.detector import detect_local_livekit_config, parse_livekit_env_block
+    from wavoice.providers.livekit.client import LiveKitCloudClient
+
+    # 1. LiveKit Credentials Detection / Input
+    lk_url = url or settings.livekit_url
+    lk_key = api_key or settings.livekit_api_key
+    lk_sec = api_secret or settings.livekit_api_secret
+
+    if not (lk_url and lk_key and lk_sec):
+        # Try local detection from ~/.livekit/config.yaml or livekit.toml
+        detected = detect_local_livekit_config()
+        if detected:
+            proj_name = detected.get("project_name", "default")
+            console.print(f"[green]✓ Found local LiveKit project: [bold]{proj_name}[/bold][/green]")
+            use_detected = typer.confirm(f"Use detected project ({detected.get('LIVEKIT_URL')})?", default=True)
+            if use_detected:
+                lk_url = detected.get("LIVEKIT_URL")
+                lk_key = detected.get("LIVEKIT_API_KEY")
+                lk_sec = detected.get("LIVEKIT_API_SECRET")
+
+    # If still missing, give option to paste single .env block or enter individually
+    if not (lk_url and lk_key and lk_sec):
+        console.print("\n[dim]Tip: You can paste the copied .env snippet from cloud.livekit.io below,[/dim]")
+        console.print("[dim]or press Enter to input URL, API Key, and Secret individually.[/dim]")
+        raw_paste = typer.prompt("Paste LiveKit Cloud .env block (or press Enter to skip)", default="", show_default=False).strip()
+        if raw_paste:
+            parsed = parse_livekit_env_block(raw_paste)
+            lk_url = parsed.get("LIVEKIT_URL") or lk_url
+            lk_key = parsed.get("LIVEKIT_API_KEY") or lk_key
+            lk_sec = parsed.get("LIVEKIT_API_SECRET") or lk_sec
+
+    def _clean_lk_val(v: Optional[str]) -> str:
+        if not v:
+            return ""
+        s = v.strip().strip("\"'")
+        if "=" in s:
+            s = s.split("=", 1)[1].strip().strip("\"'")
+        return s
+
+    # Prompt individually if still missing
+    if not lk_url:
+        lk_url = typer.prompt("1. LiveKit Cloud URL (e.g., wss://my-project.livekit.cloud)").strip()
+    if not lk_key:
+        lk_key = typer.prompt("2. LiveKit API Key (e.g., APIxxxxxxxxx)").strip()
+    if not lk_sec:
+        lk_sec = typer.prompt("3. LiveKit API Secret", hide_input=False).strip()
+
+    lk_url = _clean_lk_val(lk_url)
+    lk_key = _clean_lk_val(lk_key)
+    lk_sec = _clean_lk_val(lk_sec)
+
+    # Test LiveKit connectivity
+    console.print("\n[cyan]Testing LiveKit Cloud connection...[/cyan]")
+    lk_client = LiveKitCloudClient(url=lk_url, api_key=lk_key, api_secret=lk_sec)
+    try:
+        conn = asyncio.run(lk_client.validate_connection())
+        console.print(f"[green]✓ Connected to LiveKit Cloud! (Key: {conn['api_key']})[/green]")
+    except Exception as e:
+        console.print(f"[bold red]❌ LiveKit connection failed:[/bold red] {e}")
+        raise typer.Exit(1)
+    finally:
+        asyncio.run(lk_client.close())
+
+    # 2. Meta System User Access Token
+    meta_token = token or settings.whatsapp_token
+    while True:
+        if meta_token:
+            masked = f"{meta_token[:6]}...{meta_token[-4:]}"
+            console.print(f"[dim]Current Meta Token: {masked}[/dim]")
+            tok_input = typer.prompt(
+                "4. Meta System User Access Token (press Enter to keep current, or paste new token)",
+                default="",
+                show_default=False,
+                hide_input=False,
+            ).strip()
+            meta_token = tok_input if tok_input else meta_token
+        else:
+            meta_token = typer.prompt("4. Meta System User Access Token", hide_input=False).strip()
+
+        if not meta_token:
+            console.print("[red]A Meta System User Access Token is required.[/red]")
+            continue
+
+        console.print("[cyan]Validating Meta token with Graph API...[/cyan]")
+        async def _check_meta(tok: str):
+            client = MetaGraphClient(tok)
+            try:
+                return await client.inspect_token()
+            finally:
+                await client.close()
+
+        try:
+            tok_info = asyncio.run(_check_meta(meta_token))
+            if not tok_info or tok_info.get("error"):
+                console.print(f"[bold red]❌ Token invalid:[/bold red] {tok_info.get('error', 'Authentication failed')}")
+                meta_token = ""
+                continue
+            console.print("[green]✓ Meta token verified active![/green]")
+            break
+        except Exception as e:
+            console.print(f"[bold red]❌ Token check failed:[/bold red] {e}")
+            meta_token = ""
+            continue
+
+    # 3. Meta App Secret
+    meta_secret = secret or settings.whatsapp_app_secret
+    if meta_secret:
+        masked_sec = f"{meta_secret[:4]}...{meta_secret[-2:]}"
+        console.print(f"[dim]Current Meta App Secret: {masked_sec}[/dim]")
+        sec_input = typer.prompt(
+            "5. Meta App Secret (press Enter to keep current, or paste new secret)",
+            default="",
+            show_default=False,
+            hide_input=False,
+        ).strip()
+        meta_secret = sec_input if sec_input else meta_secret
+    else:
+        meta_secret = typer.prompt("5. Meta App Secret (from Meta App > Settings > Basic)").strip()
+
+    # 4. Ingress Preference (Tunnel vs Custom URL)
+    chosen_public_url = public_url or settings.public_url
+    if not chosen_public_url:
+        console.print("\n[bold cyan]Webhook Ingress Configuration:[/bold cyan]")
+        console.print("  [bold green]1.[/bold green] Automated Cloudflare Quick Tunnel [dim](Recommended for local testing — zero setup)[/dim]")
+        console.print("  [bold green]2.[/bold green] Custom Public HTTPS URL [dim](For production/staging e.g. https://api.mycompany.com)[/dim]")
+        choice = typer.prompt("Select ingress method", default="1").strip()
+        if choice == "2":
+            chosen_public_url = typer.prompt("Enter public HTTPS URL").strip().rstrip("/")
+
+    # Discover account details & auto-enable calling
+    console.print("\n[cyan]Auto-discovering WhatsApp account details via Meta Graph API...[/cyan]")
+    async def _setup_meta():
+        meta = MetaGraphClient(meta_token)
+        try:
+            waba = settings.whatsapp_waba_id or await meta.discover_waba_id()
+            phone = settings.whatsapp_phone_number_id or (await meta.discover_phone_number_id(waba) if waba else None)
+            phone_data = await meta.verify_phone_number(phone) if phone else {}
+            # Auto-enable voice calling
+            if phone:
+                await meta.enable_voice_calling(phone)
+            return waba, phone, phone_data
+        finally:
+            await meta.close()
+
+    try:
+        waba_id, phone_id, phone_info = asyncio.run(_setup_meta())
+        display_num = phone_info.get("display_phone_number", phone_id or "Unknown")
+        console.print(f"    [green]✓ WhatsApp Business Number:[/green] [bold]{display_num}[/bold]")
+        console.print("    [green]✓ WhatsApp Voice Calling status: ENABLED[/green]")
+    except Exception as e:
+        console.print(f"[yellow]Meta auto-discovery notice: {e}[/yellow]")
+        waba_id = settings.whatsapp_waba_id or ""
+        phone_id = settings.whatsapp_phone_number_id or ""
+        display_num = phone_id
+
+    # Save to .env
+    _update_env({
+        "LIVEKIT_URL": lk_url,
+        "LIVEKIT_API_KEY": lk_key,
+        "LIVEKIT_API_SECRET": lk_sec,
+        "WHATSAPP_TOKEN": meta_token,
+        "WHATSAPP_APP_SECRET": meta_secret,
+        "WHATSAPP_WABA_ID": waba_id,
+        "WHATSAPP_PHONE_NUMBER_ID": phone_id,
+        "PUBLIC_URL": chosen_public_url,
+    })
+    console.print("\n[bold green]✓ Configuration saved to .env![/bold green]")
+    track_event("livekit_setup_completed")
+
+    # Summary table
+    console.print()
+    summary_table = Table(title="🎉 LiveKit WhatsApp Setup Complete!", show_header=True, header_style="bold green")
+    summary_table.add_column("Property", style="bold white", width=25)
+    summary_table.add_column("Details", style="cyan")
+
+    summary_table.add_row("WhatsApp Number", f"[bold green]{display_num}[/bold green]")
+    summary_table.add_row("LiveKit Project", lk_url)
+    summary_table.add_row("Ingress Method", f"Custom URL ({chosen_public_url})" if chosen_public_url else "Automated Cloudflare Quick Tunnel")
+    summary_table.add_row("Starter AI Agent", "LiveKit Voice Agent (wavoice-agent)")
+    summary_table.add_row("Initial Greeting", "Hello! You have successfully connected WhatsApp AI calling via LiveKit Cloud...")
+
+    console.print(summary_table)
+    console.print()
+    console.print(
+        Panel.fit(
+            f"[bold green]📞 Ready to Talk![/bold green]\n"
+            f"Run [cyan]wavoice livekit dev[/cyan] to launch the bridge & start talking to your LiveKit AI agent!",
+            border_style="green",
+        )
+    )
+    console.print(CREDITS_FOOTER)
+
+    should_launch = launch or typer.confirm("Do you want to start the LiveKit AI agent server now?", default=True)
+    if should_launch:
+        from wavoice.core.config import Settings
+        from wavoice.providers.livekit.runtime import LiveKitRuntime
+        runtime = LiveKitRuntime(config=Settings())
+        runtime.run(tunnel=not bool(chosen_public_url), custom_url=chosen_public_url)
+
+
+@livekit_cli.command(name="dev")
+def livekit_dev(
+    port: int = typer.Option(8000, "--port", "-p", help="Local webhook server port"),
+    no_tunnel: bool = typer.Option(False, "--no-tunnel", help="Disable automated Cloudflare tunnel"),
+    public_url: Optional[str] = typer.Option(None, "--public-url", help="Custom public HTTPS URL (skips tunnel)"),
+    agent_name: Optional[str] = typer.Option(None, "--agent-name", "-a", help="Target LiveKit agent name (defaults to wavoice-agent or LIVEKIT_AGENT_NAME)"),
+    no_agent: bool = typer.Option(False, "--no-agent", help="Do not run bundled test agent worker (use your own LiveKit agent)"),
+    no_telemetry: bool = typer.Option(False, "--no-telemetry", help="Opt out of anonymous usage telemetry"),
+):
+    """Start the LiveKit WhatsApp bridge and launch the bundled LiveKit AI agent."""
+    if no_telemetry:
+        os.environ["WAVOICE_TELEMETRY"] = "false"
+        settings.telemetry_enabled = False
+
+    target_agent = agent_name or settings.livekit_agent_name or "wavoice-agent"
+
+    console.print(BANNER_HEADER)
+    console.print(
+        Panel.fit(
+            f"[bold green]Starting WAVoice LiveKit Cloud Bridge...[/bold green]\n"
+            f"Routing incoming WhatsApp voice calls to LiveKit agent: [bold cyan]{target_agent}[/bold cyan]"
+            + (" (running own external agent worker)" if no_agent else " (running bundled test worker)"),
+            border_style="green",
+        )
+    )
+    console.print(CREDITS_FOOTER)
+    console.print()
+
+    from wavoice.core.config import Settings
+    cfg = Settings()
+    if not (cfg.livekit_url and cfg.livekit_api_key and cfg.livekit_api_secret):
+        console.print("[bold red]❌ LiveKit credentials missing![/bold red]")
+        console.print("[yellow]LIVEKIT_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET are not configured in your .env[/yellow]\n")
+        should_setup = typer.confirm("Would you like to run 'wavoice livekit setup' now?", default=True)
+        if should_setup:
+            livekit_setup()
+            return
+        raise typer.Exit(1)
+
+    from wavoice.providers.livekit.runtime import LiveKitRuntime
+    runtime = LiveKitRuntime(config=cfg)
+    runtime.run(
+        port=port,
+        tunnel=not no_tunnel and not public_url and not cfg.public_url,
+        custom_url=public_url or cfg.public_url,
+        run_agent=not no_agent,
+        agent_name=target_agent,
+    )
+
+
+@livekit_cli.command(name="doctor")
+def livekit_doctor():
+    """Run pre-flight diagnostics on your LiveKit Cloud WhatsApp setup."""
+    console.print(BANNER_HEADER)
+    console.print(Panel.fit("[bold cyan]WAVoice LiveKit Cloud Diagnostics[/bold cyan]", border_style="cyan"))
+
+    table = Table(show_header=True, header_style="bold magenta")
+    table.add_column("Check", style="dim", width=30)
+    table.add_column("Status", width=12)
+    table.add_column("Details")
+
+    from wavoice.core.config import Settings
+    from wavoice.providers.livekit.provider import LiveKitProvider
+    provider = LiveKitProvider(config=Settings())
+
+    diag = asyncio.run(provider.doctor())
+    for check_name, (ok, detail) in diag.items():
+        status = "[green]PASS[/green]" if ok else "[red]FAIL[/red]"
+        table.add_row(check_name.title(), status, detail)
+
+    console.print(table)
+    console.print()
+    console.print(CREDITS_FOOTER)
+
+
+@cli.command(name="setup-livekit", hidden=True)
+def setup_livekit_alias(
+    url: Optional[str] = typer.Option(None, "--url", "-u", help="LiveKit Cloud URL"),
+    api_key: Optional[str] = typer.Option(None, "--api-key", "-k", help="LiveKit API Key"),
+    api_secret: Optional[str] = typer.Option(None, "--api-secret", "-s", help="LiveKit API Secret"),
+    token: Optional[str] = typer.Option(None, "--token", "-t", help="Meta System User Access Token"),
+    secret: Optional[str] = typer.Option(None, "--secret", help="Meta App Secret"),
+    public_url: Optional[str] = typer.Option(None, "--public-url", "-p", help="Custom public HTTPS URL"),
+    launch: bool = typer.Option(False, "--launch", "-l", help="Launch runtime after setup"),
+    no_telemetry: bool = typer.Option(False, "--no-telemetry", help="Opt out of anonymous usage telemetry"),
+):
+    """Alias for 'wavoice livekit setup'."""
+    livekit_setup(
+        url=url,
+        api_key=api_key,
+        api_secret=api_secret,
+        token=token,
+        secret=secret,
+        public_url=public_url,
+        launch=launch,
+        no_telemetry=no_telemetry,
+    )
+
+
 if __name__ == "__main__":
     cli()
+
 
