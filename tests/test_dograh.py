@@ -2,7 +2,8 @@
 
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
-from wavoice.core.dograh import DograhCloudClient, DograhAPIError
+from wavoice.providers.dograh import DograhCloudClient, DograhAPIError, DograhProvider
+from wavoice.core.config import Settings
 
 
 @pytest.mark.asyncio
@@ -107,4 +108,36 @@ async def test_publish_workflow_no_draft_graceful():
         resp = await client.publish_workflow(13625)
         assert resp["status"] == "published"
         assert resp["workflow_id"] == 13625
+
+
+@pytest.mark.asyncio
+async def test_dograh_provider_validate_credentials():
+    cfg = Settings(dograh_api_key="test_dograh_key")
+    provider = DograhProvider(config=cfg)
+    
+    with patch.object(provider.get_client(), "list_telephony_configurations", new_callable=AsyncMock) as mock_list:
+        mock_list.return_value = [{"id": 1, "name": "Test Config"}]
+        res = await provider.validate_credentials()
+        assert res["status"] == "connected"
+        assert res["configurations_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_dograh_provider_doctor():
+    cfg = Settings(dograh_api_key="test_dograh_key")
+    provider = DograhProvider(config=cfg)
+
+    with patch.object(provider.get_client(), "list_telephony_configurations", new_callable=AsyncMock) as mock_list:
+        mock_list.return_value = [{"id": 1}]
+        diag = await provider.doctor()
+        assert diag["credentials"][0] is True
+        assert diag["connectivity"][0] is True
+
+
+@pytest.mark.asyncio
+async def test_dograh_provider_doctor_missing_key():
+    cfg = Settings(dograh_api_key="")
+    provider = DograhProvider(config=cfg)
+    diag = await provider.doctor()
+    assert diag["credentials"][0] is False
 

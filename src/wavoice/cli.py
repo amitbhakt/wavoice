@@ -13,8 +13,8 @@ from rich.table import Table
 from rich.text import Text
 
 from wavoice.core.config import settings
-from wavoice.core.dograh import DograhCloudClient
 from wavoice.core.meta import MetaGraphClient
+from wavoice.providers.dograh import DograhCloudClient, DograhProvider
 
 cli = typer.Typer(
     name="wavoice",
@@ -708,6 +708,30 @@ def setup_dograh_alias(
 ):
     """Alias for 'wavoice dograh setup'."""
     dograh_setup(api_key=api_key, token=token, secret=secret, base_url=base_url, no_telemetry=no_telemetry)
+
+
+@dograh_cli.command(name="doctor")
+def dograh_doctor():
+    """Run pre-flight diagnostics on your Dograh Cloud WhatsApp setup."""
+    console.print(BANNER_HEADER)
+    console.print(Panel.fit("[bold cyan]WAVoice Dograh Cloud Diagnostics[/bold cyan]", border_style="cyan"))
+
+    table = Table(show_header=True, header_style="bold magenta")
+    table.add_column("Check", style="dim", width=30)
+    table.add_column("Status", width=12)
+    table.add_column("Details")
+
+    from wavoice.core.config import Settings
+    provider = DograhProvider(config=Settings())
+
+    diag = asyncio.run(provider.doctor())
+    for check_name, (ok, detail) in diag.items():
+        status = "[green]PASS[/green]" if ok else "[red]FAIL[/red]"
+        table.add_row(check_name.title(), status, detail)
+
+    console.print(table)
+    console.print()
+    console.print(CREDITS_FOOTER)
 
 
 # -------------------------------------------------------------------------

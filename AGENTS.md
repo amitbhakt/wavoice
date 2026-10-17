@@ -1,30 +1,37 @@
-# AGENTS.md — WAVoice Agent Guide
+# AGENTS.md — WAVoice Operational & Development Guide
 
-This document is written for AI Coding Agents (such as Antigravity, Claude Code, Cursor, Codex, Windsurf, etc.) assisting users with building, running, extending, or troubleshooting **WAVoice**.
-
----
-
-## 1. Project Purpose & Scope
-
-**WAVoice** is an open-source Python framework built by Amit Bhakt ([@amitbhakt](https://github.com/amitbhakt)) that turns any WhatsApp Business Phone Number into a real-time AI voice agent in one command.
-
-It wraps:
-1. **Meta WhatsApp Business Calling API** (WhatsApp Cloud API v21.0+)
-2. **Pipecat AI** (`pipecat-ai[google,webrtc]>=1.12.0`)
-3. **LiveKit Cloud** (`livekit-api`, `livekit-agents`)
-4. **Dograh Cloud API** (`api.dograh.com`)
-5. **Cloudflare Quick Tunnels** (`cloudflared`)
-6. **FastAPI & aiortc** for WebRTC SDP / ICE exchange.
+This guide is designed for AI Coding Agents (Antigravity, Claude Code, Cursor, Codex, Windsurf, Copilot Workspace) operating in this repository. It defines the core mental models, architecture invariants, intent-routing decision trees, and systematic troubleshooting runbooks.
 
 ---
 
-## 2. Directory Structure & Key Components
+## 1. Core Purpose & Mental Model
+
+### What WAVoice Is
+**WAVoice** is an open-source bootstrap accelerator and telephony plumbing engine for WhatsApp Voice AI. It eliminates 100% of the friction between Meta's WhatsApp Cloud Calling API and voice agent runtimes:
+- Auto-discovers WABA and Phone Number IDs from access tokens.
+- Programmatically turns on WhatsApp Voice Calling on Meta Graph API.
+- Sets up 3-tier webhook synchronization (Phone Override, WABA Subscription, App Events).
+- Handles WebRTC SDP offer/answer exchange, SRTP audio decoupling, and atomic call-claim deduplication.
+
+### The 3 Core Provider Ecosystems
+Never confuse the three supported execution modes:
+
+| Provider | Best For | Architecture & Ingress | Local Process Needed? |
+| :--- | :--- | :--- | :--- |
+| **Pipecat** (`wavoice init` / `start`) | Python engineers building custom STT $\rightarrow$ LLM $\rightarrow$ TTS or native Gemini Live pipelines. | Local WebRTC media server (`SmallWebRTCTransport` + `aiortc`) behind Cloudflare Quick Tunnel or `--public-url`. | **Yes** (`wavoice start`) |
+| **LiveKit Cloud** (`wavoice livekit dev`) | Engineers using LiveKit Cloud & `livekit-agents` for low-latency WebRTC voice rooms. | Webhook bridge translates Meta SDP $\rightarrow$ LiveKit Cloud `AcceptWhatsAppCallRequest` $\rightarrow$ LiveKit Room. | **Yes** (`wavoice livekit dev`) |
+| **Dograh Cloud** (`wavoice dograh setup`) | Visual/no-code builders creating conversational workflows with drag-and-drop studio tools. | Direct cloud-to-cloud: Meta delivers webhooks directly to `api.dograh.com`. | **No** (Zero tunnels needed) |
+
+---
+
+## 2. Directory Structure & Invariants
 
 ```
 wavoice/
-├── pyproject.toml             # Dependencies & CLI entrypoints ('wavoice', 'wa-voice')
+├── pyproject.toml             # CLI entrypoints ('wavoice', 'wa-voice') and dependencies
 ├── README.md                  # Human-facing technical documentation
 ├── AGENTS.md                  # AI agent operational guide (this file)
+├── docs/                      # Dedicated provider guides (livekit.md, dograh.md, pipecat.md)
 ├── examples/
 │   └── custom_stt_llm_tts.py  # Reference script for Deepgram + OpenAI + Cartesia
 ├── src/
@@ -36,13 +43,16 @@ wavoice/
 │       │   └── gemini_live.py # Default Gemini 2.0 Flash Multimodal Live pipeline
 │       ├── core/
 │       │   ├── config.py      # Pydantic Settings (.env loader)
-│       │   ├── dograh.py      # Dograh Cloud API client (telephony, sample agent workflow)
 │       │   ├── ice.py         # STUN / TURN server candidate builder
 │       │   ├── lifecycle.py   # In-memory atomic call claim & deduplication
 │       │   ├── meta.py        # Meta Graph API client (auto-discovery, webhooks, voice settings)
+│       │   ├── telemetry.py   # Privacy-safe anonymous usage tracking
 │       │   └── tunnel.py      # Cloudflare Quick Tunnel binary manager
 │       ├── providers/         # Pluggable Voice AI runtime providers
 │       │   ├── base.py        # Abstract BaseProvider interface
+│       │   ├── dograh/        # Dograh Cloud visual voice agent integration
+│       │   │   ├── client.py  # Dograh Cloud REST API client
+│       │   │   └── provider.py# Dograh provider setup & diagnostics
 │       │   └── livekit/       # LiveKit Cloud WhatsApp Connector integration
 │       │       ├── agent.py   # Bundled test voice agent (wavoice-agent)
 │       │       ├── client.py  # LiveKit Cloud telephony client (AcceptWhatsAppCall)
@@ -54,145 +64,105 @@ wavoice/
 │           ├── app.py         # FastAPI webhook router & WebRTC dispatcher
 │           └── security.py    # X-Hub-Signature-256 HMAC verification
 └── tests/
-    ├── test_wavoice.py        # Pytest unit tests (HMAC, claim locks, ice servers, cloudflared)
-    ├── test_dograh.py         # Pytest unit tests for Dograh Cloud client & workflow schemas
-    └── test_livekit.py        # Pytest unit tests for LiveKit Cloud provider & webhooks
+    ├── test_wavoice.py        # Core pipeline, HMAC, claim locks, tunnel, ICE
+    ├── test_dograh.py         # Dograh Cloud client & workflow schemas
+    └── test_livekit.py        # LiveKit Cloud client, webhook translation, agent routing
 ```
+
+### Architectural Invariants:
+1. **Provider Isolation**: All third-party platforms (Dograh, LiveKit, etc.) belong under `src/wavoice/providers/<provider_name>/` and must implement `BaseProvider` (`validate_credentials`, `setup`, `doctor`). Core networking and Meta Graph API stay in `src/wavoice/core/`.
+2. **Never Break Test Suite**: Always run `uv run pytest` before and after modifying code. All tests must pass.
+3. **No macOS Docker WebRTC**: Local WebRTC debugging must be done natively with Python 3.12 (`uv`), never inside Docker Desktop on macOS (Docker for Mac bridge drops UDP media packets).
+4. **Safe Credential Handling**: Never log, commit, or hardcode tokens. All secrets load via `wavoice.core.config.Settings` from `.env`.
 
 ---
 
-## 3. High-Priority Gotchas for Agents
+## 3. Intent Routing Matrix (What to do when the user asks...)
 
-### A. Meta Webhook Routing Hierarchy
-Meta routes WhatsApp calling webhooks in strict priority order:
-1. **Phone Number Level Override** (`POST /v21.0/{phone_number_id}` with `webhook_configuration`): **Highest Priority**.
-2. **WABA Level Subscribed App** (`POST /v21.0/{waba_id}/subscribed_apps`): Second Priority.
-3. **App Level Subscriptions** (`POST /v21.0/{app_id}/subscriptions`): Fallback.
-
-**Crucial**: If a phone number previously had a phone-level override set (e.g. from an old ngrok or another SaaS service), Meta will **ignore** the WABA URL and send webhooks to the old URL. WAVoice explicitly overrides Tier 1 on startup via `meta.override_phone_number_webhook()`.
-
-### B. LiveKit WhatsApp Cloud API Connector Gotchas
-1. **Cloud API Version Constraint**:
-   - `AcceptWhatsAppCallRequest.whatsapp_cloud_api_version` MUST be `"23.0"` (string literal without any leading "v").
-   - Omitting it or using `"v23.0"` / `"v21.0"` triggers a `ServerError: whatsapp cloud api version not supported (status=400)`.
-2. **Meta SDP Location**:
-   - In Meta's webhook payload for calling, the SDP offer is located at `call["session"]["sdp"]` (nested under `session`), NOT `call["sdp"]`.
-3. **Targeting LiveKit Agents**:
-   - To route incoming calls to a specific agent in LiveKit Cloud without manual room dispatch, specify `request.agents.append(RoomAgentDispatch(agent_name=target_agent))` in `AcceptWhatsAppCallRequest`.
-   - The CLI supports `--agent-name <name>` and `--no-agent` (if the developer already has a worker running in LiveKit Cloud).
-
-### C. Pipecat 1.12.0 API Specifics
-1. **Transport Parameters**:
-   - `SmallWebRTCTransport` does NOT use `InputParams`.
-   - Use `from pipecat.transports.base_transport import TransportParams`.
-   - Always pass `bot_vad_stop_secs=0.5` on realtime pipelines to avoid hanging audio buffers.
-2. **PipelineTask Constructor**:
-   - `PipelineTask` inherits from `PipelineWorker`.
-   - Pass `params` as a keyword argument: `PipelineTask(pipeline=pipeline, params=PipelineParams(...))`.
-3. **Call Object Attribute**:
-   - In `WhatsAppConnectCall`, the caller number is stored under `call.from_` (with trailing underscore because `from` is a Python keyword), NOT `call.From`.
-   - Safe access: `getattr(call, "from_", getattr(call, "From", "caller"))`.
-4. **Pipecat WhatsAppClient Body Verification**:
-   - `WhatsAppClient` throws `Missing raw request body` if `whatsapp_secret` is passed without `raw_body`.
-   - WAVoice verifies the HMAC signature upfront in FastAPI, so it initializes `WhatsAppClient` with `whatsapp_secret=None` and passes `raw_body=raw_body` to `handle_webhook_request`.
-
-### D. macOS WebRTC Local Development
-Do **not** run local WebRTC development inside Docker Desktop on macOS. Docker for Mac does not forward UDP packets efficiently over bridge networks, which results in silent audio drops. Run natively using Python 3.12 and `uv`.
+| User Prompt / Request | Exact Agent Action |
+| :--- | :--- |
+| **"Set up WhatsApp calling from scratch"** | Ask for Meta Token, Secret, and Gemini Key. Execute `uv run wavoice init`. Verify using `uv run wavoice doctor`. |
+| **"Connect to LiveKit Cloud"** | Check for LiveKit credentials in `~/.livekit/config.yaml` or `.env`. Run `uv run wavoice livekit setup`, then `uv run wavoice livekit dev`. |
+| **"Route to my existing LiveKit agent"** | Launch the bridge with `--agent-name <name> --no-agent`: `uv run wavoice livekit dev --agent-name <name> --no-agent`. |
+| **"Connect to Dograh Studio (no-code)"** | Prompt for `DOGRAH_API_KEY`. Run `uv run wavoice dograh setup`. Meta webhooks route directly to Dograh Cloud without local tunnel. |
+| **"Build custom STT + LLM + TTS pipeline"** | Reference [`examples/custom_stt_llm_tts.py`](examples/custom_stt_llm_tts.py) using `WhatsAppVoiceApp` and Pipecat's `SmallWebRTCTransport`. |
+| **"Nobody answered / It's just ringing"** | **Run Diagnostic Playbook immediately** (Section 4). 90% of the time, this is an expired Meta token or a webhook pointing to a dead tunnel. |
+| **"How do I deploy to production?"** | Explain: Host behind persistent domain (`--public-url https://api.yourdomain.com`), or for Dograh use cloud routing, or for LiveKit paste the 15-line webhook handler directly into backend. |
 
 ---
 
-## 4. How to Assist the User
+## 4. Diagnostic & Troubleshooting Runbook
 
-### Scenario 1: User wants to set up from scratch (Pipecat / Native Gemini)
-Instruct them or execute:
-```bash
-uv run wavoice init
-```
-Prompt them only for:
-1. `WHATSAPP_TOKEN` (Meta System User token)
-2. `WHATSAPP_APP_SECRET`
-3. `GEMINI_API_KEY`
-WAVoice auto-discovers WABA ID and Phone Number ID and turns on Voice Calling.
+When a call is ringing and not answered, systematically execute these checks in order:
 
-### Scenario 2: User wants to diagnose issues
-Run:
-```bash
-uv run wavoice doctor
-# or for LiveKit:
-uv run wavoice livekit doctor
-```
-Inspect the output table:
-- Check if Voice calling API says `PASS`.
-- Check if Tier 1, 2, and 3 webhooks point to the active tunnel.
+### Check 1: Meta Access Token Validity
+Meta's temporary test tokens expire every 24 hours. When expired, Meta silently drops or rejects call webhooks.
+- **How to test**:
+  ```bash
+  uv run wavoice doctor
+  ```
+- **Error signal**: `wavoice.core.meta.TokenExpiredError: Meta Access Token has expired: Session has expired...`
+- **Fix**: Direct user to [developers.facebook.com](https://developers.facebook.com) $\rightarrow$ WhatsApp $\rightarrow$ API Setup, generate a new token, and update `WHATSAPP_TOKEN` in `.env`.
 
-### Scenario 3: User wants to build a custom STT + LLM + TTS pipeline
-Point them to `examples/custom_stt_llm_tts.py`.
-The pattern is:
-```python
-from wavoice import WhatsAppVoiceApp
-from pipecat.audio.vad.silero import SileroVADAnalyzer
-from pipecat.pipeline.pipeline import Pipeline
-from pipecat.pipeline.runner import PipelineRunner
-from pipecat.pipeline.task import PipelineParams, PipelineTask
-from pipecat.processors.aggregators.llm_context import LLMContext
-from pipecat.processors.aggregators.llm_response_universal import (
-    LLMContextAggregatorPair,
-    LLMUserAggregatorParams,
-)
+### Check 2: Webhook Routing Priority (Tier 1 Override)
+Meta routes calling webhooks in strict priority:
+1. **Tier 1 (Phone Number Override)**: `POST /v21.0/{phone_number_id}` with `webhook_configuration` (**Highest Priority**).
+2. **Tier 2 (WABA Subscription)**: `POST /v21.0/{waba_id}/subscribed_apps`.
+3. **Tier 3 (App Level)**: Fallback.
 
-app = WhatsAppVoiceApp()
+- **Gotcha**: If Tier 1 points to an old, dead Cloudflare tunnel from a stopped session, Meta will ignore all other webhooks and calls will just ring.
+- **Fix**: Check `Tier 1: Phone Override` in `wavoice doctor`. If testing LiveKit/Pipecat, make sure the local dev process is actively running. If testing Dograh, ensure Tier 1 is explicitly pointed to `https://api.dograh.com/api/v1/telephony/whatsapp/webhook`.
 
-@app.on_call
-async def handle_call(transport, call_info):
-    # 1. Custom services (STT, LLM, TTS)
-    # 2. Silero VAD + LLMContextAggregatorPair
-    # 3. Assemble Pipeline: [transport.input(), stt, user_agg, llm, tts, transport.output(), assistant_agg]
-    # 4. PipelineTask(pipeline=pipeline, params=PipelineParams(allow_interruptions=True))
-    # 5. PipelineRunner().run(task)
+### Check 3: LiveKit Cloud Specific Requirements
+1. **Protobuf API Version**: `AcceptWhatsAppCallRequest.whatsapp_cloud_api_version` MUST be `"23.0"` (string literal, no leading "v"). Any other version yields `ServerError: whatsapp cloud api version not supported (status=400)`.
+2. **SDP Extraction**: Meta's calling webhook nests the SDP offer at `call["session"]["sdp"]` (not `call["sdp"]`).
+3. **Room Agent Dispatch**: To send incoming calls directly to an agent worker without manual room dispatch, always include `req.agents.append(RoomAgentDispatch(agent_name=target_agent))`.
 
-if __name__ == "__main__":
-    app.run()
-```
-
-### Scenario 4: User wants one-command setup for Dograh Cloud (Visual Studio)
-Instruct them or execute:
-```bash
-uv run wavoice dograh setup
-```
-Prompts for:
-1. `DOGRAH_API_KEY` (from `app.dograh.com/api-keys`)
-2. `WHATSAPP_TOKEN` (Meta System User token)
-3. `WHATSAPP_APP_SECRET`
-WAVoice auto-discovers Meta IDs, enables voice calling, creates the Dograh telephony configuration, syncs phone numbers, creates and publishes a test WhatsApp agent workflow in Dograh, and points Meta webhooks directly to Dograh Cloud in <30s.
-
-### Scenario 5: User wants one-command setup for LiveKit Cloud
-Instruct them or execute:
-```bash
-# 1. Run setup wizard
-uv run wavoice livekit setup
-
-# 2. Run dev bridge & agent
-uv run wavoice livekit dev
-
-# If routing to a specific LiveKit agent or existing agent:
-uv run wavoice livekit dev --agent-name my-agent --no-agent
-```
-Prompts for:
-1. LiveKit credentials (auto-detected from `~/.livekit/config.yaml` or `.env` snippet)
-2. Meta Token & Secret
-Configures WhatsApp calling, sets up webhook bridge, and routes callers to a LiveKit agent.
+### Check 4: Dograh Cloud Specific Requirements
+1. **Synced Phone Row**: Dograh must have the phone number registered under the telephony config (`sync_phone_numbers`).
+2. **Bound Inbound Workflow**: The phone row must have `inbound_workflow_id` populated with a published workflow ID (`bind_workflow_to_phone_number`).
+3. **Token Freshness on Dograh**: If Meta's token was refreshed, update the telephony configuration on Dograh Cloud (`PUT /api/v1/organizations/telephony-configs/{config_id}`) so Dograh can call Meta back to accept the call.
 
 ---
 
-## 5. Running Tests
+## 5. Development & Testing Commands
 
-Always ensure tests pass before making code modifications:
+### Run Full Test Suite
 ```bash
 uv run pytest
 ```
-Unit tests live in:
-- `tests/test_wavoice.py` (Core pipeline, HMAC, claim locks, tunnel, ICE)
-- `tests/test_dograh.py` (Dograh Cloud client, schemas, workflow deployment)
-- `tests/test_livekit.py` (LiveKit Cloud client, webhook translation, agent routing)
+*Current test suite: 21 passed across `test_wavoice.py`, `test_dograh.py`, and `test_livekit.py`.*
 
+### Run Provider Diagnostics
+```bash
+# Core & Meta diagnostics
+uv run wavoice doctor
 
+# LiveKit Cloud diagnostics
+uv run wavoice livekit doctor
+
+# Dograh Cloud diagnostics
+uv run wavoice dograh doctor
+```
+
+### Launch Development Runtimes
+```bash
+# Mode A: Out-of-the-box Gemini 2.0 Flash Live
+uv run wavoice start
+
+# Mode B: LiveKit Cloud Bridge (bundled agent)
+uv run wavoice livekit dev
+
+# Mode C: LiveKit Cloud Bridge (custom external agent)
+uv run wavoice livekit dev --agent-name my-agent --no-agent
+```
+
+---
+
+## 6. Pre-Completion Checklist for AI Agents
+
+Before marking any task complete and pushing to GitHub:
+- [ ] Run `uv run pytest` and verify **all tests pass**.
+- [ ] Check `git status` to ensure no unwanted files (`.env`, temporary logs, scratch files) are staged.
+- [ ] Verify that any modified documentation, docstrings, and `AGENTS.md` accurately reflect current code.
+- [ ] Provide clear, step-by-step next actions to the user.
