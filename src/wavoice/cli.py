@@ -24,7 +24,7 @@ cli = typer.Typer(
 console = Console()
 
 BANNER_HEADER = """
-[bold cyan]╦ ╦╔═╗╦  ╦╔═╗╦╔═╗╔═╗[/bold cyan]   [bold green]WAVoice[/bold green] [dim]v0.2.0[/dim]
+[bold cyan]╦ ╦╔═╗╦  ╦╔═╗╦╔═╗╔═╗[/bold cyan]   [bold green]WAVoice[/bold green] [dim]v0.3.0[/dim]
 [bold cyan]║║║╠═╣╚╗╔╝║ ║║║  ║╣ [/bold cyan]   [dim]One-command WhatsApp Voice AI runtime[/dim]
 [bold cyan]╚╩╝╩ ╩ ╚╝ ╚═╝╩╚═╝╚═╝[/bold cyan]
 """

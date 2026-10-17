@@ -76,7 +76,7 @@ def main():
     # Scene 2: Banner display
     banner = [
         [("$ ", TEXT_GREEN), ("uvx wavoice init", TEXT_WHITE)],
-        [("╦ ╦╔═╗╦  ╦╔═╗╦╔═╗╔═╗   WAVoice v0.2.0", TEXT_CYAN)],
+        [("╦ ╦╔═╗╦  ╦╔═╗╦╔═╗╔═╗   WAVoice v0.3.0", TEXT_CYAN)],
         [("║║║╠═╣╚╗╔╝║ ║║║  ║╣    One-command WhatsApp Voice AI runtime", TEXT_CYAN)],
         [("╚╩╝╩ ╩ ╚╝ ╚═╝╩╚═╝╚═╝", TEXT_CYAN)],
         [("─" * 68, TEXT_DIM)],
