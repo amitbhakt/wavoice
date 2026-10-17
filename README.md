@@ -209,7 +209,7 @@ if __name__ == "__main__":
     app.run()  # Launches tunnel, registers Meta webhooks, and serves pipeline
 ```
 
-*(See [examples/custom_stt_llm_tts.py](examples/custom_stt_llm_tts.py) for the complete runnable file)*
+*(See [examples/custom_stt_llm_tts.py](examples/custom_stt_llm_tts.py) for the complete runnable file. For more details, see the [Pipecat Integration Guide](docs/pipecat.md).)*
 
 ---
 
@@ -247,6 +247,8 @@ In under 30 seconds, this single command:
 
 When it finishes, open WhatsApp on your phone, call your business number, and speak directly to your Dograh visual agent!
 
+👉 *For custom prompt engineering, tools, and voices, see the [Dograh Cloud Integration Guide](docs/dograh.md).*
+
 ---
 
 ## LiveKit Cloud Integration (Real-Time Voice AI)
@@ -266,6 +268,8 @@ uv run wavoice livekit dev
 - **Auto-Detection**: Automatically reads your `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET` from `~/.livekit/config.yaml` or parses the 1-click `.env` snippet from the LiveKit Cloud dashboard.
 - **Ingress Flexibility**: Choose between an automated **Cloudflare Quick Tunnel** (zero-config for local dev) or supply your own `--public-url` for staging/production.
 - **LiveKit Insights Ready**: Automatically registers as a named agent (`wavoice-agent`) so call telemetry and room sessions are tracked in your LiveKit Cloud dashboard.
+
+👉 *For routing to existing cloud agents, production deployment, and webhook code snippets, see the [LiveKit Cloud Integration Guide](docs/livekit.md).*
 
 ---
 
