@@ -1,6 +1,6 @@
 [project]
 name = "wavoice"
-version = "0.3.0"
+version = "0.3.1"
 description = "One-command WhatsApp Voice AI with Pipecat and automated Cloudflare Quick Tunnels"
 readme = "README.md"
 authors = [

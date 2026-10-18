@@ -3,5 +3,5 @@
 from wavoice.core.config import Settings, settings
 from wavoice.sdk import WhatsAppVoiceApp
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 __all__ = ["WhatsAppVoiceApp", "Settings", "settings"]
