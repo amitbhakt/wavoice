@@ -244,3 +244,43 @@ async def test_livekit_provider_doctor():
         diag_valid = await provider_valid.doctor()
         assert diag_valid["credentials"][0] is True
         assert diag_valid["connectivity"][0] is True
+
+
+@pytest.mark.asyncio
+async def test_livekit_webhook_rejects_missing_signature_when_secret_configured():
+    """Verify that requests missing X-Hub-Signature-256 return 403 when app_secret is set."""
+    cfg = Settings(
+        whatsapp_token="meta_token_xyz",
+        whatsapp_phone_number_id="phone_888",
+        whatsapp_app_secret="test_app_secret",
+        livekit_url="wss://test.livekit.cloud",
+        livekit_api_key="API123",
+        livekit_api_secret="SEC456",
+    )
+    app = create_livekit_app(config=cfg)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post("/webhook", content=b'{"object":"whatsapp_business_account"}')
+        assert resp.status_code == 403
+        assert "Missing webhook signature" in resp.text
+
+
+@pytest.mark.asyncio
+async def test_livekit_webhook_rejects_invalid_signature():
+    """Verify that requests with an invalid X-Hub-Signature-256 return 403."""
+    cfg = Settings(
+        whatsapp_token="meta_token_xyz",
+        whatsapp_phone_number_id="phone_888",
+        whatsapp_app_secret="test_app_secret",
+        livekit_url="wss://test.livekit.cloud",
+        livekit_api_key="API123",
+        livekit_api_secret="SEC456",
+    )
+    app = create_livekit_app(config=cfg)
+    transport = ASGITransport(app=app)
+    headers = {"x-hub-signature-256": "sha256=invalid_hex_string"}
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post("/webhook", content=b'{"object":"whatsapp_business_account"}', headers=headers)
+        assert resp.status_code == 403
+        assert "Invalid webhook signature" in resp.text
+

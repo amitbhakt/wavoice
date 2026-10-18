@@ -68,12 +68,11 @@ async def handle_livekit_webhook_event(request: Request):
     signature_header = request.headers.get("x-hub-signature-256")
 
     # Verify HMAC signature if app_secret is configured
-    if cfg.whatsapp_app_secret and signature_header:
-        verify_whatsapp_signature(
-            app_secret=cfg.whatsapp_app_secret,
-            raw_body=raw_body,
-            signature_header=signature_header,
-        )
+    verify_whatsapp_signature(
+        app_secret=cfg.whatsapp_app_secret,
+        raw_body=raw_body,
+        signature_header=signature_header,
+    )
 
     try:
         payload = await request.json()
