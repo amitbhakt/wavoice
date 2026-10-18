@@ -73,7 +73,10 @@ def ensure_cloudflared_binary() -> Path:
 
             if is_tar:
                 with tarfile.open(tmp_path, "r:gz") as tar:
-                    tar.extractall(path=CLOUDFLARED_CACHE_DIR)
+                    if hasattr(tarfile, "data_filter"):
+                        tar.extractall(path=CLOUDFLARED_CACHE_DIR, filter="data")
+                    else:
+                        tar.extractall(path=CLOUDFLARED_CACHE_DIR)
             else:
                 shutil.copy2(tmp_path, cached_binary)
 

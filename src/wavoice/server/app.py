@@ -7,8 +7,11 @@ Handles:
 """
 
 import asyncio
+import hmac
 import json
 from typing import Any, Callable, Coroutine, Dict, Optional
+
+MAX_WEBHOOK_BODY_SIZE = 1_048_576  # 1 MB max payload to protect against memory exhaustion DoS
 
 import aiohttp
 from fastapi import APIRouter, FastAPI, HTTPException, Query, Request
@@ -81,10 +84,8 @@ async def handle_webhook_verification(
         logger.warning(f"[Webhook] Invalid hub.mode: {hub_mode}")
         raise HTTPException(status_code=400, detail="Invalid hub.mode")
 
-    if hub_verify_token != cfg.whatsapp_verify_token:
-        logger.warning(
-            f"[Webhook] Verification failed: token mismatch (received: {hub_verify_token}, expected: {cfg.whatsapp_verify_token})"
-        )
+    if not hmac.compare_digest(hub_verify_token, cfg.whatsapp_verify_token):
+        logger.warning("[Webhook] Verification failed: token mismatch")
         raise HTTPException(status_code=403, detail="Invalid verification token")
 
     logger.success("[Webhook] Verification challenge succeeded!")
@@ -95,7 +96,21 @@ async def handle_webhook_verification(
 async def handle_webhook_event(request: Request):
     """Handle incoming WhatsApp Cloud API events (connect, terminate, etc.)."""
     cfg: Settings = getattr(request.app.state, "config", settings)
+
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > MAX_WEBHOOK_BODY_SIZE:
+                logger.warning(f"[Webhook] Request rejected: Content-Length {content_length} exceeds limit")
+                raise HTTPException(status_code=413, detail="Payload too large")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid Content-Length header")
+
     raw_body = await request.body()
+    if len(raw_body) > MAX_WEBHOOK_BODY_SIZE:
+        logger.warning(f"[Webhook] Request rejected: body size {len(raw_body)} exceeds limit")
+        raise HTTPException(status_code=413, detail="Payload too large")
+
     signature_header = request.headers.get("x-hub-signature-256")
 
     # 1. Verify HMAC Signature

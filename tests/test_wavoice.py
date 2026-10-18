@@ -111,3 +111,42 @@ def test_ice_servers_builder():
     )
     assert len(servers_with_turn) == 2
     assert servers_with_turn[1].username == "user1"
+
+
+@pytest.mark.asyncio
+async def test_webhook_rejects_payload_too_large():
+    """Verify that requests exceeding 1MB payload limit return 413 Payload Too Large."""
+    app = create_app()
+    transport = ASGITransport(app=app)
+    large_body = b"x" * (1_048_576 + 10)  # > 1MB
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post("/webhook", content=large_body)
+        assert resp.status_code == 413
+        assert "Payload too large" in resp.text
+
+
+@pytest.mark.asyncio
+async def test_webhook_rejects_content_length_header_too_large():
+    """Verify that requests advertising Content-Length > 1MB are rejected early with 413."""
+    app = create_app()
+    transport = ASGITransport(app=app)
+    headers = {"content-length": "2000000"}  # 2MB
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        resp = await client.post("/webhook", content=b"{}", headers=headers)
+        assert resp.status_code == 413
+
+
+def test_env_file_permissions_restricted(tmp_path, monkeypatch):
+    """Verify that _update_env sets 0o600 (owner read/write only) on .env."""
+    import os
+    from wavoice.cli import _update_env
+
+    test_env = tmp_path / ".env"
+    monkeypatch.chdir(tmp_path)
+
+    _update_env({"TEST_SECRET": "my_secret_token_123"})
+    assert test_env.exists()
+
+    mode = os.stat(test_env).st_mode & 0o777
+    assert mode == 0o600
+

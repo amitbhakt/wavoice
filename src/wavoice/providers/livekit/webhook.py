@@ -5,6 +5,7 @@ directly into LiveKit Cloud using `accept_whatsapp_call`.
 """
 
 import asyncio
+import hmac
 from typing import Any, Dict, Optional
 from fastapi import APIRouter, FastAPI, HTTPException, Query, Request
 from loguru import logger
@@ -15,6 +16,7 @@ from wavoice.core.lifecycle import lifecycle_manager
 from wavoice.providers.livekit.client import LiveKitCloudClient
 from wavoice.server.security import verify_whatsapp_signature
 
+MAX_WEBHOOK_BODY_SIZE = 1_048_576  # 1 MB max payload to protect against memory exhaustion DoS
 
 router = APIRouter()
 _livekit_client: Optional[LiveKitCloudClient] = None
@@ -52,7 +54,7 @@ async def handle_livekit_webhook_verification(
         logger.warning(f"[LiveKit Webhook] Invalid hub.mode: {hub_mode}")
         raise HTTPException(status_code=400, detail="Invalid hub.mode")
 
-    if hub_verify_token != cfg.whatsapp_verify_token:
+    if not hmac.compare_digest(hub_verify_token, cfg.whatsapp_verify_token):
         logger.warning("[LiveKit Webhook] Verification token mismatch")
         raise HTTPException(status_code=403, detail="Invalid verification token")
 
@@ -64,7 +66,21 @@ async def handle_livekit_webhook_verification(
 async def handle_livekit_webhook_event(request: Request):
     """Handle incoming WhatsApp Cloud API events (call connect, terminate, etc.)."""
     cfg: Settings = getattr(request.app.state, "config", settings)
+
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > MAX_WEBHOOK_BODY_SIZE:
+                logger.warning(f"[LiveKit Webhook] Request rejected: Content-Length {content_length} exceeds limit")
+                raise HTTPException(status_code=413, detail="Payload too large")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid Content-Length header")
+
     raw_body = await request.body()
+    if len(raw_body) > MAX_WEBHOOK_BODY_SIZE:
+        logger.warning(f"[LiveKit Webhook] Request rejected: body size {len(raw_body)} exceeds limit")
+        raise HTTPException(status_code=413, detail="Payload too large")
+
     signature_header = request.headers.get("x-hub-signature-256")
 
     # Verify HMAC signature if app_secret is configured

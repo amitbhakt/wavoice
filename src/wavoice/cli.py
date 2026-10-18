@@ -24,7 +24,7 @@ cli = typer.Typer(
 console = Console()
 
 BANNER_HEADER = """
-[bold cyan]╦ ╦╔═╗╦  ╦╔═╗╦╔═╗╔═╗[/bold cyan]   [bold green]WAVoice[/bold green] [dim]v0.3.1[/dim]
+[bold cyan]╦ ╦╔═╗╦  ╦╔═╗╦╔═╗╔═╗[/bold cyan]   [bold green]WAVoice[/bold green] [dim]v0.3.2[/dim]
 [bold cyan]║║║╠═╣╚╗╔╝║ ║║║  ║╣ [/bold cyan]   [dim]One-command WhatsApp Voice AI runtime[/dim]
 [bold cyan]╚╩╝╩ ╩ ╚╝ ╚═╝╩╚═╝╚═╝[/bold cyan]
 """
@@ -355,6 +355,10 @@ def _update_env(updates: dict[str, Any]) -> None:
         if v is not None and str(v).strip():
             lines.append(f"{k}={v}")
     env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    try:
+        os.chmod(env_path, 0o600)
+    except OSError:
+        pass
 
 
 @dograh_cli.command(name="setup")
