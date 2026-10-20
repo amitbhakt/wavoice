@@ -103,6 +103,30 @@ class Settings(BaseSettings):
         description="Target LiveKit agent name for WhatsApp room dispatch",
     )
 
+    # Retell AI Credentials
+    retell_api_key: Optional[str] = Field(
+        default=None,
+        alias="RETELL_API_KEY",
+        description="Retell AI API Key (from beta.retellai.com/dashboard)",
+    )
+    retell_agent_id: Optional[str] = Field(
+        default=None,
+        alias="RETELL_AGENT_ID",
+        description="Retell AI Inbound Agent ID",
+    )
+
+    # Cloudonix SIP Gateway Credentials
+    cloudonix_api_key: Optional[str] = Field(
+        default=None,
+        alias="CLOUDONIX_API_KEY",
+        description="Cloudonix API Key for SIP trunking",
+    )
+    cloudonix_domain: Optional[str] = Field(
+        default="sip.cloudonix.io",
+        alias="CLOUDONIX_DOMAIN",
+        description="Cloudonix SIP domain hostname",
+    )
+
     # WebRTC ICE Servers (STUN / TURN)
     stun_server: str = Field(
         default="stun:stun.l.google.com:19302",

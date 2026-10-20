@@ -1074,6 +1074,220 @@ def setup_livekit_alias(
     )
 
 
+# -------------------------------------------------------------------------
+# Retell AI WhatsApp Subcommand Group
+# -------------------------------------------------------------------------
+retell_cli = typer.Typer(
+    name="retell",
+    help="One-command Retell AI WhatsApp Voice setup via SIP.",
+    add_completion=False,
+)
+cli.add_typer(retell_cli, name="retell")
+
+
+@retell_cli.command(name="setup")
+def retell_setup(
+    api_key: Optional[str] = typer.Option(None, "--api-key", "-k", help="Retell AI API Key"),
+    agent_id: Optional[str] = typer.Option(None, "--agent-id", "-a", help="Retell AI Agent ID"),
+    token: Optional[str] = typer.Option(None, "--token", "-t", help="Meta System User Access Token"),
+    phone_id: Optional[str] = typer.Option(None, "--phone-id", "-p", help="WhatsApp Business Phone Number ID"),
+    sip_domain: str = typer.Option("sip.cloudonix.io", "--sip-domain", help="SIP Gateway Domain"),
+    no_telemetry: bool = typer.Option(False, "--no-telemetry", help="Opt out of anonymous usage telemetry"),
+):
+    """One-command setup: connects WhatsApp to Retell AI voice agents via SIP."""
+    if no_telemetry:
+        os.environ["WAVOICE_TELEMETRY"] = "false"
+    from wavoice.core.telemetry import track_event
+    track_event("retell_setup_started")
+
+    console.print(BANNER_HEADER)
+    console.print(
+        Panel.fit(
+            "[bold green]Retell AI WhatsApp Voice Setup[/bold green]\n"
+            "Connect WhatsApp Business to Retell AI voice agents via SIP in under 60 seconds.",
+            border_style="green",
+        )
+    )
+
+    from wavoice.core.config import Settings
+    from wavoice.providers.retell.client import RetellClient, RetellClientError
+    from wavoice.providers.retell.provider import RetellProvider
+
+    cfg = Settings()
+    active_api_key = api_key or cfg.retell_api_key or os.getenv("RETELL_API_KEY")
+    while not active_api_key:
+        active_api_key = console.input("[bold yellow]Enter your Retell AI API Key:[/bold yellow] ").strip()
+
+    retell_client = RetellClient(api_key=active_api_key)
+    with console.status("[bold green]Testing connection to Retell AI...[/bold green]"):
+        try:
+            conn = asyncio.run(retell_client.validate_connection())
+            console.print(f"[green]✓[/green] Connected to Retell AI! Found {conn.get('agent_count', 0)} agent(s).")
+        except RetellClientError as e:
+            console.print(f"[red]✗ Failed to connect to Retell AI:[/red] {e}")
+            raise typer.Exit(1)
+
+    active_agent_id = agent_id or cfg.retell_agent_id or os.getenv("RETELL_AGENT_ID")
+    while not active_agent_id:
+        active_agent_id = console.input("[bold yellow]Enter your Retell Inbound Agent ID:[/bold yellow] ").strip()
+
+    with console.status("[bold green]Verifying Retell Agent...[/bold green]"):
+        try:
+            agent_data = asyncio.run(retell_client.get_agent(active_agent_id))
+            agent_name = agent_data.get("agent_name", active_agent_id)
+            console.print(f"[green]✓[/green] Verified Retell Agent: [bold cyan]{agent_name}[/bold cyan] ({active_agent_id})")
+        except RetellClientError as e:
+            console.print(f"[red]✗ Retell agent error:[/red] {e}")
+            raise typer.Exit(1)
+
+    # Meta Credentials
+    meta_token = token or cfg.whatsapp_token or os.getenv("WHATSAPP_TOKEN")
+    while not meta_token:
+        meta_token = console.input("[bold yellow]Enter your Meta System User Access Token:[/bold yellow] ").strip()
+
+    meta_client = MetaGraphClient(access_token=meta_token)
+    with console.status("[bold green]Inspecting Meta access token...[/bold green]"):
+        try:
+            token_info = asyncio.run(meta_client.inspect_token())
+            console.print("[green]✓[/green] Meta Access Token is valid.")
+        except Exception as e:
+            console.print(f"[red]✗ Meta token inspection failed:[/red] {e}")
+            raise typer.Exit(1)
+
+    disc_phone = phone_id or cfg.whatsapp_phone_number_id or os.getenv("WHATSAPP_PHONE_NUMBER_ID")
+    if not disc_phone:
+        with console.status("[bold green]Auto-discovering Phone Number ID from Meta...[/bold green]"):
+            disc_phone = asyncio.run(meta_client.discover_phone_number_id())
+
+    while not disc_phone:
+        disc_phone = console.input("[bold yellow]Enter your WhatsApp Business Phone Number ID:[/bold yellow] ").strip()
+
+    with console.status(f"[bold green]Fetching details for Phone Number ID {disc_phone}...[/bold green]"):
+        try:
+            phone_info = asyncio.run(meta_client.verify_phone_number(disc_phone))
+            display_phone = phone_info.get("display_phone_number", disc_phone)
+            console.print(f"[green]✓[/green] Phone Number: [bold cyan]{display_phone}[/bold cyan]")
+        except Exception as e:
+            console.print(f"[yellow]![/yellow] Could not fetch phone details: {e}")
+            display_phone = disc_phone
+
+    # Execute Retell Provider Setup
+    setup_cfg = Settings(
+        retell_api_key=active_api_key,
+        retell_agent_id=active_agent_id,
+        whatsapp_token=meta_token,
+        whatsapp_phone_number_id=disc_phone,
+        cloudonix_domain=sip_domain,
+    )
+    provider = RetellProvider(config=setup_cfg)
+
+    with console.status("[bold green]Configuring Retell & WhatsApp SIP trunking...[/bold green]"):
+        try:
+            res = asyncio.run(provider.setup(
+                meta_info={"phone_id": disc_phone, "display_phone_number": display_phone}
+            ))
+            console.print("[green]✓[/green] Retell phone number registration complete!")
+            console.print(f"[green]✓[/green] Meta WhatsApp SIP calling routed to [bold cyan]{sip_domain}:5061[/bold cyan]!")
+        except Exception as e:
+            console.print(f"[red]✗ Setup failed:[/red] {e}")
+            raise typer.Exit(1)
+
+    console.print()
+    console.print(
+        Panel.fit(
+            f"[bold green]🎉 Retell AI WhatsApp Voice Setup Complete![/bold green]\n\n"
+            f"[bold white]Phone Number:[/bold white] {display_phone}\n"
+            f"[bold white]Retell Agent:[/bold white] {agent_name} ({active_agent_id})\n"
+            f"[bold white]SIP Gateway:[/bold white] {sip_domain}:5061\n\n"
+            f"[dim]Whenever a customer calls your WhatsApp number, Meta routes the call over SIP\n"
+            f"directly to Retell AI. WAVoice has completed setup and exited.[/dim]",
+            border_style="green",
+        )
+    )
+    track_event("retell_setup_completed")
+    console.print(CREDITS_FOOTER)
+
+
+@retell_cli.command(name="doctor")
+def retell_doctor():
+    """Run pre-flight diagnostics on your Retell AI configuration."""
+    console.print(BANNER_HEADER)
+    console.print(Panel.fit("[bold cyan]WAVoice Retell AI Diagnostics[/bold cyan]", border_style="cyan"))
+
+    table = Table(show_header=True, header_style="bold magenta")
+    table.add_column("Check", style="dim", width=30)
+    table.add_column("Status", width=12)
+    table.add_column("Details")
+
+    from wavoice.core.config import Settings
+    from wavoice.providers.retell.provider import RetellProvider
+
+    provider = RetellProvider(config=Settings())
+    diag = asyncio.run(provider.doctor())
+    for check_name, (ok, detail) in diag.items():
+        status = "[green]PASS[/green]" if ok else "[red]FAIL[/red]"
+        table.add_row(check_name.title(), status, detail)
+
+    console.print(table)
+    console.print()
+    console.print(CREDITS_FOOTER)
+
+
+@cli.command(name="setup-retell", hidden=True)
+def setup_retell_alias(
+    api_key: Optional[str] = typer.Option(None, "--api-key", "-k", help="Retell AI API Key"),
+    agent_id: Optional[str] = typer.Option(None, "--agent-id", "-a", help="Retell AI Agent ID"),
+    token: Optional[str] = typer.Option(None, "--token", "-t", help="Meta System User Access Token"),
+    phone_id: Optional[str] = typer.Option(None, "--phone-id", "-p", help="WhatsApp Business Phone Number ID"),
+    sip_domain: str = typer.Option("sip.cloudonix.io", "--sip-domain", help="SIP Gateway Domain"),
+    no_telemetry: bool = typer.Option(False, "--no-telemetry", help="Opt out of anonymous usage telemetry"),
+):
+    """Alias for 'wavoice retell setup'."""
+    retell_setup(
+        api_key=api_key,
+        agent_id=agent_id,
+        token=token,
+        phone_id=phone_id,
+        sip_domain=sip_domain,
+        no_telemetry=no_telemetry,
+    )
+
+
+@retell_cli.command(name="start")
+def retell_start(
+    port: int = typer.Option(8000, "--port", "-p", help="Local server port"),
+    no_tunnel: bool = typer.Option(False, "--no-tunnel", help="Disable automated Cloudflare tunnel"),
+    custom_url: Optional[str] = typer.Option(None, "--custom-url", help="Custom public HTTPS URL"),
+    no_telemetry: bool = typer.Option(False, "--no-telemetry", help="Opt out of anonymous usage telemetry"),
+):
+    """Start local WhatsApp <-> Retell AI WebRTC Bridge."""
+    if no_telemetry:
+        os.environ["WAVOICE_TELEMETRY"] = "false"
+    from wavoice.core.telemetry import track_event
+    track_event("retell_start_server", {"tunnel": not no_tunnel, "port": port})
+
+    console.print(BANNER_HEADER)
+    console.print(
+        Panel.fit(
+            "[bold green]Starting WAVoice Retell AI Bridge...[/bold green]\n"
+            "Incoming WhatsApp calls will be bridged directly to your Retell AI Agent.",
+            border_style="green",
+        )
+    )
+    console.print(CREDITS_FOOTER)
+    console.print()
+
+    from wavoice.core.config import Settings
+    from wavoice.providers.retell.runtime import RetellRuntime
+
+    runtime = RetellRuntime(config=Settings())
+    runtime.run(
+        port=port,
+        tunnel=not no_tunnel,
+        custom_url=custom_url,
+    )
+
+
 if __name__ == "__main__":
     cli()
 

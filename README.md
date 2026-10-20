@@ -224,6 +224,8 @@ if __name__ == "__main__":
 | `wavoice livekit setup` | **One-command LiveKit Cloud setup**: connects Meta WhatsApp calling, configures webhooks, auto-detects LiveKit credentials, and sets up a LiveKit voice agent. |
 | `wavoice livekit dev` | Starts the LiveKit webhook bridge and launches the bundled LiveKit voice agent. |
 | `wavoice livekit doctor` | Diagnostics check for LiveKit Cloud credentials, connectivity, and Meta WhatsApp voice calling. |
+| `wavoice retell start` | **One-command Retell AI bridge**: spins up automated tunnel, registers Meta webhooks, and bridges live WhatsApp voice calls directly to your Retell AI agent. |
+| `wavoice retell doctor` | Diagnostics check for Retell AI API key, inbound agent verification, and Meta WhatsApp voice calling. |
 
 ---
 
@@ -270,6 +272,29 @@ uv run wavoice livekit dev
 - **LiveKit Insights Ready**: Automatically registers as a named agent (`wavoice-agent`) so call telemetry and room sessions are tracked in your LiveKit Cloud dashboard.
 
 👉 *For routing to existing cloud agents, production deployment, and webhook code snippets, see the [LiveKit Cloud Integration Guide](docs/livekit.md).*
+
+---
+
+## Retell AI Integration (Voice AI Agents)
+
+If you are deploying voice agents with **[Retell AI](https://retellai.com)**, WAVoice bridges WhatsApp voice calls directly into your Retell AI agent using native WebRTC:
+
+```bash
+# 1. Start the Retell bridge (prompts for API key & Agent ID if not set in .env)
+uv run wavoice retell start
+
+# Or set credentials via environment:
+RETELL_API_KEY="your_retell_key" RETELL_AGENT_ID="your_agent_id" uv run wavoice retell start
+```
+
+### Highlights:
+- **Instant WebRTC Negotiation**: Directly connects Meta's WhatsApp WebRTC audio stream to Retell's WebRTC proxy gateway (`create-web-call`), eliminating carrier transcoding loss.
+- **Automated Cloudflare Tunnel**: Auto-provisions an ephemeral HTTPS tunnel for development, auto-discovers your Meta WABA/Phone IDs, and registers the webhook callback in seconds.
+- **Doctor Diagnostics**: Run `uv run wavoice retell doctor` to verify API keys, agent status, and Meta voice calling readiness.
+
+> [!NOTE]
+> **Cloudonix SIP Trunking (`feat/cloudonix-sip` branch):**
+> Direct serverless SIP routing for WhatsApp $\rightarrow$ Cloudonix $\rightarrow$ Retell is in active development on the `feat/cloudonix-sip` branch in collaboration with the Cloudonix team.
 
 ---
 

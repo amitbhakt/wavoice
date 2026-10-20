@@ -35,9 +35,14 @@ class MetaGraphClient:
         self._owned_session: Optional[aiohttp.ClientSession] = None
 
     async def _get_session(self) -> aiohttp.ClientSession:
-        if self._external_session and not self._external_session.closed:
-            return self._external_session
-        if self._owned_session is None or self._owned_session.closed:
+        if self._external_session and not getattr(self._external_session, "closed", False):
+            loop = getattr(self._external_session, "_loop", None)
+            if loop is not None and hasattr(loop, "is_closed") and callable(loop.is_closed):
+                if not isinstance(loop.is_closed(), bool) or not loop.is_closed():
+                    return self._external_session
+            else:
+                return self._external_session
+        if self._owned_session is None or self._owned_session.closed or self._owned_session._loop.is_closed():
             self._owned_session = aiohttp.ClientSession()
         return self._owned_session
 
@@ -98,6 +103,42 @@ class MetaGraphClient:
             else:
                 error_msg = data.get("error", {}).get("message", str(data))
                 logger.warning(f"[Meta] Could not auto-enable voice calling: {error_msg}")
+                return False
+
+    async def enable_sip_calling(
+        self,
+        phone_number_id: str,
+        sip_host: str = "sip.cloudonix.io",
+        sip_port: int = 5061,
+    ) -> bool:
+        """Programmatically configure Meta WhatsApp Phone Number to route calls via SIP trunk."""
+        session = await self._get_session()
+        url = f"{GRAPH_BASE_URL}/{phone_number_id}/settings"
+        payload = {
+            "calling": {
+                "status": "ENABLED",
+                "call_icon_visibility": "DEFAULT",
+                "sip": {
+                    "status": "ENABLED",
+                    "servers": [
+                        {
+                            "hostname": sip_host,
+                            "port": sip_port,
+                        }
+                    ],
+                },
+            }
+        }
+
+        logger.info(f"[Meta] Configuring SIP calling on {phone_number_id} -> {sip_host}:{sip_port}...")
+        async with session.post(url, headers=self._headers, json=payload) as resp:
+            data = await resp.json()
+            if resp.status == 200 and data.get("success"):
+                logger.success(f"[Meta] SIP calling successfully routed to {sip_host}:{sip_port}!")
+                return True
+            else:
+                error_msg = data.get("error", {}).get("message", str(data))
+                logger.warning(f"[Meta] Could not configure SIP calling: {error_msg}")
                 return False
 
     async def subscribe_waba_webhook(

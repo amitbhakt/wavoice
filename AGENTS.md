@@ -13,14 +13,19 @@ This guide is designed for AI Coding Agents (Antigravity, Claude Code, Cursor, C
 - Sets up 3-tier webhook synchronization (Phone Override, WABA Subscription, App Events).
 - Handles WebRTC SDP offer/answer exchange, SRTP audio decoupling, and atomic call-claim deduplication.
 
-### The 3 Core Provider Ecosystems
-Never confuse the three supported execution modes:
+### The 4 Core Provider Ecosystems
+Never confuse the supported execution modes:
 
 | Provider | Best For | Architecture & Ingress | Local Process Needed? |
 | :--- | :--- | :--- | :--- |
 | **Pipecat** (`wavoice init` / `start`) | Python engineers building custom STT $\rightarrow$ LLM $\rightarrow$ TTS or native Gemini Live pipelines. | Local WebRTC media server (`SmallWebRTCTransport` + `aiortc`) behind Cloudflare Quick Tunnel or `--public-url`. | **Yes** (`wavoice start`) |
+| **Retell AI** (`wavoice retell start`) | Voice AI developers running conversational agents via Retell AI. | Direct WebRTC bridge: Meta SDP offer $\rightarrow$ Retell WebRTC Proxy (`create-web-call` + `/webrtc-proxy/sessions`). | **Yes** (`wavoice retell start`) or Cloud Container |
 | **LiveKit Cloud** (`wavoice livekit dev`) | Engineers using LiveKit Cloud & `livekit-agents` for low-latency WebRTC voice rooms. | Webhook bridge translates Meta SDP $\rightarrow$ LiveKit Cloud `AcceptWhatsAppCallRequest` $\rightarrow$ LiveKit Room. | **Yes** (`wavoice livekit dev`) |
 | **Dograh Cloud** (`wavoice dograh setup`) | Visual/no-code builders creating conversational workflows with drag-and-drop studio tools. | Direct cloud-to-cloud: Meta delivers webhooks directly to `api.dograh.com`. | **No** (Zero tunnels needed) |
+
+> [!NOTE]
+> **Cloudonix SIP Trunking (`feat/cloudonix-sip` branch):**
+> Serverless SIP routing via Cloudonix is tracked and maintained on the `feat/cloudonix-sip` branch while upstream TLS Certificate Authority requirements with Cloudonix SBC gateways are coordinated.
 
 ---
 
@@ -53,20 +58,26 @@ wavoice/
 │       │   ├── dograh/        # Dograh Cloud visual voice agent integration
 │       │   │   ├── client.py  # Dograh Cloud REST API client
 │       │   │   └── provider.py# Dograh provider setup & diagnostics
-│       │   └── livekit/       # LiveKit Cloud WhatsApp Connector integration
-│       │       ├── agent.py   # Bundled test voice agent (wavoice-agent)
-│       │       ├── client.py  # LiveKit Cloud telephony client (AcceptWhatsAppCall)
-│       │       ├── detector.py# Auto-detects ~/.livekit/config.yaml & LiveKit tokens
-│       │       ├── provider.py# LiveKit setup wizard, verification & diagnostics
-│       │       ├── runtime.py # LiveKit webhook server & agent launcher
-│       │       └── webhook.py # FastAPI webhook handler translating Meta SDP offers
+│       │   ├── livekit/       # LiveKit Cloud WhatsApp Connector integration
+│       │   │   ├── agent.py   # Bundled test voice agent (wavoice-agent)
+│       │   │   ├── client.py  # LiveKit Cloud telephony client (AcceptWhatsAppCall)
+│       │   │   ├── detector.py# Auto-detects ~/.livekit/config.yaml & LiveKit tokens
+│       │   │   ├── provider.py# LiveKit setup wizard, verification & diagnostics
+│       │   │   ├── runtime.py # LiveKit webhook server & agent launcher
+│       │   │   └── webhook.py # FastAPI webhook handler translating Meta SDP offers
+│       │   └── retell/        # Retell AI Voice integration
+│       │       ├── client.py  # Retell REST client (list agents, get agent, import numbers)
+│       │       ├── provider.py# Retell verification & doctor diagnostics
+│       │       ├── runtime.py # Retell bridge runner with automated Quick Tunnel
+│       │       └── webhook.py # Translates Meta WhatsApp SDP offer <-> Retell WebRTC proxy
 │       └── server/
 │           ├── app.py         # FastAPI webhook router & WebRTC dispatcher
 │           └── security.py    # X-Hub-Signature-256 HMAC verification
 └── tests/
     ├── test_wavoice.py        # Core pipeline, HMAC, claim locks, tunnel, ICE
     ├── test_dograh.py         # Dograh Cloud client & workflow schemas
-    └── test_livekit.py        # LiveKit Cloud client, webhook translation, agent routing
+    ├── test_livekit.py        # LiveKit Cloud client, webhook translation, agent routing
+    └── test_retell.py         # Retell AI client, WebRTC bridge negotiation, agent mapping
 ```
 
 ### Architectural Invariants:
@@ -82,6 +93,7 @@ wavoice/
 | User Prompt / Request | Exact Agent Action |
 | :--- | :--- |
 | **"Set up WhatsApp calling from scratch"** | Ask for Meta Token, Secret, and Gemini Key. Execute `uv run wavoice init`. Verify using `uv run wavoice doctor`. |
+| **"Connect to Retell AI"** | Prompt for `RETELL_API_KEY` and `RETELL_AGENT_ID`. Run `uv run wavoice retell start` for the live WebRTC bridge. Run `uv run wavoice retell doctor` for connectivity check. |
 | **"Connect to LiveKit Cloud"** | Check for LiveKit credentials in `~/.livekit/config.yaml` or `.env`. Run `uv run wavoice livekit setup`, then `uv run wavoice livekit dev`. |
 | **"Route to my existing LiveKit agent"** | Launch the bridge with `--agent-name <name> --no-agent`: `uv run wavoice livekit dev --agent-name <name> --no-agent`. |
 | **"Connect to Dograh Studio (no-code)"** | Prompt for `DOGRAH_API_KEY`. Run `uv run wavoice dograh setup`. Meta webhooks route directly to Dograh Cloud without local tunnel. |
@@ -131,12 +143,15 @@ Meta routes calling webhooks in strict priority:
 ```bash
 uv run pytest
 ```
-*Current test suite: 21 passed across `test_wavoice.py`, `test_dograh.py`, and `test_livekit.py`.*
+*Current test suite: 33 passed across `test_wavoice.py`, `test_dograh.py`, `test_livekit.py`, and `test_retell.py`.*
 
 ### Run Provider Diagnostics
 ```bash
 # Core & Meta diagnostics
 uv run wavoice doctor
+
+# Retell AI diagnostics
+uv run wavoice retell doctor
 
 # LiveKit Cloud diagnostics
 uv run wavoice livekit doctor
@@ -150,10 +165,13 @@ uv run wavoice dograh doctor
 # Mode A: Out-of-the-box Gemini 2.0 Flash Live
 uv run wavoice start
 
-# Mode B: LiveKit Cloud Bridge (bundled agent)
+# Mode B: Retell AI WebRTC Bridge
+uv run wavoice retell start
+
+# Mode C: LiveKit Cloud Bridge (bundled agent)
 uv run wavoice livekit dev
 
-# Mode C: LiveKit Cloud Bridge (custom external agent)
+# Mode D: LiveKit Cloud Bridge (custom external agent)
 uv run wavoice livekit dev --agent-name my-agent --no-agent
 ```
 
