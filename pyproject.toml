@@ -1,7 +1,7 @@
 [project]
 name = "wavoice"
-version = "0.3.2"
-description = "One-command WhatsApp Voice AI with Pipecat and automated Cloudflare Quick Tunnels"
+version = "0.4.0"
+description = "One-command WhatsApp Voice AI with Pipecat, Retell, LiveKit, and Dograh"
 readme = "README.md"
 authors = [
     { name = "Amit Bhakt", email = "yashubhakt@gmail.com" }

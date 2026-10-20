@@ -4,6 +4,7 @@ Provides native speech-to-speech interaction (~300ms latency) with only ONE API 
 """
 
 import os
+from typing import Optional
 from loguru import logger
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
@@ -23,6 +24,7 @@ async def run_gemini_live_agent(
         "Keep your answers short and natural for a voice conversation."
     ),
     voice: str = "Puck",
+    greeting: Optional[str] = None,
 ) -> None:
     """Execute the default Gemini 2.0 Flash Live speech-to-speech pipeline."""
     api_key = settings.gemini_api_key or os.getenv("GOOGLE_API_KEY")
@@ -118,18 +120,18 @@ async def run_gemini_live_agent(
         logger.info(f"[GeminiLive] Caller {caller_from} disconnected")
         await task.cancel()
 
-    # Trigger Gemini to start conversation with exact greeting requested
+    # Trigger Gemini to start conversation with initial greeting
     from pipecat.frames.frames import LLMContextFrame
 
-    initial_context = LLMContext([
-        {
-            "role": "user",
-            "content": (
-                "The caller just connected. Greet them immediately by saying exactly: "
-                "'Hi, I'm your Gemini AI assistant connected via WhatsApp. You have successfully enabled WhatsApp AI calling.'"
-            ),
-        }
-    ])
+    first_prompt = (
+        f"The caller just connected. Greet them immediately by saying: '{greeting}'"
+        if greeting
+        else (
+            "The caller just connected. Greet them immediately by saying exactly: "
+            "'Hi, I'm your Gemini AI assistant connected via WhatsApp. You have successfully enabled WhatsApp AI calling.'"
+        )
+    )
+    initial_context = LLMContext([{"role": "user", "content": first_prompt}])
     await task.queue_frame(LLMContextFrame(context=initial_context))
 
     # Disable handle_sigint on pipeline runner so Uvicorn manages Ctrl+C cleanly without hang

@@ -141,6 +141,30 @@ class MetaGraphClient:
                 logger.warning(f"[Meta] Could not configure SIP calling: {error_msg}")
                 return False
 
+    async def disable_sip_calling(self, phone_number_id: str) -> bool:
+        """Disable SIP trunk routing on Meta number to route calls via standard Webhook/WebRTC."""
+        session = await self._get_session()
+        url = f"{GRAPH_BASE_URL}/{phone_number_id}/settings"
+        payload = {
+            "calling": {
+                "status": "ENABLED",
+                "call_icon_visibility": "DEFAULT",
+                "sip": {
+                    "status": "DISABLED",
+                },
+            }
+        }
+        logger.info(f"[Meta] Disabling SIP calling on {phone_number_id} to revert to standard WebRTC webhook...")
+        async with session.post(url, headers=self._headers, json=payload) as resp:
+            data = await resp.json()
+            if resp.status == 200 and data.get("success"):
+                logger.success(f"[Meta] SIP calling disabled. Standard voice calling enabled on {phone_number_id}!")
+                return True
+            else:
+                error_msg = data.get("error", {}).get("message", str(data))
+                logger.warning(f"[Meta] Could not disable SIP calling: {error_msg}")
+                return False
+
     async def subscribe_waba_webhook(
         self,
         waba_id: str,
