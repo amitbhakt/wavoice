@@ -1,8 +1,9 @@
 [project]
 name = "wavoice"
-version = "0.4.0"
+version = "0.4.1"
 description = "One-command WhatsApp Voice AI with Pipecat, Retell, LiveKit, and Dograh"
 readme = "README.md"
+license = "MIT"
 authors = [
     { name = "Amit Bhakt", email = "yashubhakt@gmail.com" }
 ]
@@ -36,3 +37,16 @@ dev = [
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
 ]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "strict"
+filterwarnings = [
+    "ignore:'audioop' is deprecated:DeprecationWarning",
+    "ignore::DeprecationWarning:pipecat.*",
+]
+addopts = "-ra -q --strict-markers"

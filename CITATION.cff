@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "WAVoice: WebRTC Gateway and DevOps Automation Engine for WhatsApp Voice AI"
+authors:
+  - family-names: Bhakt
+    given-names: Amit
+    email: yashubhakt@gmail.com
+version: 0.4.1
+date-released: 2026-10-21
+license: MIT
+repository-code: "https://github.com/amitbhakt/wavoice"
+url: "https://github.com/amitbhakt/wavoice"
+keywords:
+  - webrtc
+  - devops
+  - whatsapp
+  - voice-ai
+  - conversational-ai
+  - telephony
+  - cloud-infrastructure
+  - pipecat
+  - livekit
