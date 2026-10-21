@@ -7,6 +7,7 @@ authors:
     given-names: Amit
     email: yashubhakt@gmail.com
 version: 0.4.1
+doi: 10.5281/zenodo.23537489
 date-released: 2026-10-21
 license: MIT
 repository-code: "https://github.com/amitbhakt/wavoice"

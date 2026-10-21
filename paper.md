@@ -16,6 +16,7 @@ affiliations:
   - name: Independent Researcher, India
     index: 1
 date: 21 October 2026
+doi: 10.5281/zenodo.23537489
 bibliography: paper.bib
 ---
 

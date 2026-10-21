@@ -6,6 +6,7 @@ Connect your WhatsApp Business number to **Retell AI**, **LiveKit**, **Gemini**,
 
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23537489.svg)](https://doi.org/10.5281/zenodo.23537489)
 [![Creator: Amit Bhakt](https://img.shields.io/badge/creator-Amit%20Bhakt-orange.svg)](https://github.com/amitbhakt)
 
 <p align="center">
