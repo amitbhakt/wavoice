@@ -54,29 +54,32 @@ Before starting, have these credentials ready:
 
 ## Quickstart
 
-### 1. Configure Environment (Optional)
+### 1. Interactive Setup Wizard
 
-You can save your credentials in a `.env` file in your project folder:
+Run the one-command setup wizard:
 
 ```bash
-RETELL_API_KEY="key_..."
-RETELL_AGENT_ID="agent_..."
-WHATSAPP_TOKEN="EAA..."
-WHATSAPP_APP_SECRET="your_app_secret"
+uvx wavoice retell setup
+# or: pip install wavoice && wavoice retell setup
 ```
 
-*(If you don't create a `.env` file, the command will prompt you for them interactively).*
+The interactive wizard will:
+- Connect to Retell AI and verify your Agent ID.
+- Inspect and validate your Meta System User Access Token.
+- Auto-discover your WhatsApp Business Phone Number ID.
+- Automatically save credentials to your `.env` file.
+- Optionally launch the Retell bridge immediately.
 
 ### 2. Start the Retell WebRTC Bridge
 
-Run the one-command runner:
+When ready to take calls, run:
 
 ```bash
-uvx wavoice retell start
-# or: pip install wavoice && wavoice retell start
+wavoice retell start
+# or: wavoice retell dev
 ```
 
-This single command:
+This command:
 - Auto-discovers your Meta Phone Number ID and WABA ID.
 - Enables voice calling on your WhatsApp Business number.
 - Spins up an automated HTTPS tunnel (via Cloudflare Quick Tunnel) for local testing.

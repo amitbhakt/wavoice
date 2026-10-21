@@ -22,7 +22,7 @@ Caller (WhatsApp Phone)
 Meta Cloud API (v21.0 / v23.0)
          │ Webhook (SDP Offer)
          ▼
-WAVoice Bridge (`wavoice livekit dev`)
+WAVoice Bridge (`wavoice livekit start` / `dev`)
          │ AcceptWhatsAppCallRequest (SDP translation)
          ▼
 LiveKit Cloud Telephony Server (Egress/Ingress)
@@ -52,7 +52,8 @@ LiveKit Voice Agent (`wavoice-agent` or custom agent)
 
 Run:
 ```bash
-wavoice livekit setup
+uvx wavoice livekit setup
+# or: pip install wavoice && wavoice livekit setup
 ```
 
 `WAVoice` will:
@@ -65,7 +66,8 @@ wavoice livekit setup
 ### 2. Start the Dev Bridge & Test Agent
 
 ```bash
-wavoice livekit dev
+wavoice livekit start
+# or: wavoice livekit dev
 ```
 
 This launches:

@@ -18,9 +18,9 @@ Never confuse the supported execution modes:
 
 | Provider | Best For | Architecture & Ingress | Local Process Needed? |
 | :--- | :--- | :--- | :--- |
-| **Pipecat** (`wavoice init` / `start`) | Python engineers building custom STT $\rightarrow$ LLM $\rightarrow$ TTS or native Gemini Live pipelines. | Local WebRTC media server (`SmallWebRTCTransport` + `aiortc`) behind Cloudflare Quick Tunnel or `--public-url`. | **Yes** (`wavoice start`) |
-| **Retell AI** (`wavoice retell start`) | Voice AI developers running conversational agents via Retell AI. | Direct WebRTC bridge: Meta SDP offer $\rightarrow$ Retell WebRTC Proxy (`create-web-call` + `/webrtc-proxy/sessions`). | **Yes** (`wavoice retell start`) or Cloud Container |
-| **LiveKit Cloud** (`wavoice livekit dev`) | Engineers using LiveKit Cloud & `livekit-agents` for low-latency WebRTC voice rooms. | Webhook bridge translates Meta SDP $\rightarrow$ LiveKit Cloud `AcceptWhatsAppCallRequest` $\rightarrow$ LiveKit Room. | **Yes** (`wavoice livekit dev`) |
+| **Pipecat** (`wavoice setup` / `start`) | Python engineers building custom STT $\rightarrow$ LLM $\rightarrow$ TTS or native Gemini Live pipelines. | Local WebRTC media server (`SmallWebRTCTransport` + `aiortc`) behind Cloudflare Quick Tunnel or `--public-url`. | **Yes** (`wavoice start`) |
+| **Retell AI** (`wavoice retell setup` / `start`) | Voice AI developers running conversational agents via Retell AI. | Direct WebRTC bridge: Meta SDP offer $\rightarrow$ Retell WebRTC Proxy (`create-web-call` + `/webrtc-proxy/sessions`). | **Yes** (`wavoice retell start`) or Cloud Container |
+| **LiveKit Cloud** (`wavoice livekit setup` / `start`) | Engineers using LiveKit Cloud & `livekit-agents` for low-latency WebRTC voice rooms. | Webhook bridge translates Meta SDP $\rightarrow$ LiveKit Cloud `AcceptWhatsAppCallRequest` $\rightarrow$ LiveKit Room. | **Yes** (`wavoice livekit start`) |
 | **Dograh Cloud** (`wavoice dograh setup`) | Visual/no-code builders creating conversational workflows with drag-and-drop studio tools. | Direct cloud-to-cloud: Meta delivers webhooks directly to `api.dograh.com`. | **No** (Zero tunnels needed) |
 
 > [!NOTE]
@@ -92,10 +92,10 @@ wavoice/
 
 | User Prompt / Request | Exact Agent Action |
 | :--- | :--- |
-| **"Set up WhatsApp calling from scratch"** | Ask for Meta Token, Secret, and Gemini Key. Execute `uv run wavoice init`. Verify using `uv run wavoice doctor`. |
-| **"Connect to Retell AI"** | Prompt for `RETELL_API_KEY` and `RETELL_AGENT_ID`. Run `uv run wavoice retell start` for the live WebRTC bridge. Run `uv run wavoice retell doctor` for connectivity check. |
-| **"Connect to LiveKit Cloud"** | Check for LiveKit credentials in `~/.livekit/config.yaml` or `.env`. Run `uv run wavoice livekit setup`, then `uv run wavoice livekit dev`. |
-| **"Route to my existing LiveKit agent"** | Launch the bridge with `--agent-name <name> --no-agent`: `uv run wavoice livekit dev --agent-name <name> --no-agent`. |
+| **"Set up WhatsApp calling from scratch"** | Ask for Meta Token, Secret, and Gemini Key. Execute `uv run wavoice setup`. Verify using `uv run wavoice doctor`. |
+| **"Connect to Retell AI"** | Prompt for `RETELL_API_KEY` and `RETELL_AGENT_ID`. Run `uv run wavoice retell setup`, then `uv run wavoice retell start`. Run `uv run wavoice retell doctor` for connectivity check. |
+| **"Connect to LiveKit Cloud"** | Check for LiveKit credentials in `~/.livekit/config.yaml` or `.env`. Run `uv run wavoice livekit setup`, then `uv run wavoice livekit start`. |
+| **"Route to my existing LiveKit agent"** | Launch the bridge with `--agent-name <name> --no-agent`: `uv run wavoice livekit start --agent-name <name> --no-agent`. |
 | **"Connect to Dograh Studio (no-code)"** | Prompt for `DOGRAH_API_KEY`. Run `uv run wavoice dograh setup`. Meta webhooks route directly to Dograh Cloud without local tunnel. |
 | **"Build custom STT + LLM + TTS pipeline"** | Reference [`examples/custom_stt_llm_tts.py`](examples/custom_stt_llm_tts.py) using `WhatsAppVoiceApp` and Pipecat's `SmallWebRTCTransport`. |
 | **"Nobody answered / It's just ringing"** | **Run Diagnostic Playbook immediately** (Section 4). 90% of the time, this is an expired Meta token or a webhook pointing to a dead tunnel. |
@@ -169,10 +169,10 @@ uv run wavoice start
 uv run wavoice retell start
 
 # Mode C: LiveKit Cloud Bridge (bundled agent)
-uv run wavoice livekit dev
+uv run wavoice livekit start
 
 # Mode D: LiveKit Cloud Bridge (custom external agent)
-uv run wavoice livekit dev --agent-name my-agent --no-agent
+uv run wavoice livekit start --agent-name my-agent --no-agent
 ```
 
 ---

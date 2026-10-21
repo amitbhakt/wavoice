@@ -31,9 +31,9 @@ Choose the tool you are using and run the command in your terminal:
 
 | Platform | Command | What it does |
 | :--- | :--- | :--- |
-| **Retell AI** | `uvx wavoice retell start` | Connects your WhatsApp number to your Retell agent |
-| **LiveKit** | `uvx wavoice livekit dev` | Routes WhatsApp calls into a LiveKit voice room |
-| **Gemini (Built-in)** | `uvx wavoice init` | Answers calls with Google Gemini 2.0 Flash (no extra setup) |
+| **Retell AI** | `uvx wavoice retell setup` | Connects your WhatsApp number to your Retell agent |
+| **LiveKit** | `uvx wavoice livekit setup` | Routes WhatsApp calls into a LiveKit voice room |
+| **Gemini (Built-in)** | `uvx wavoice setup` | Answers calls with Google Gemini 2.0 Flash (no extra setup) |
 | **Dograh (No-code)** | `uvx wavoice dograh setup` | Connects your WhatsApp number to your Dograh visual agent |
 
 *(Don't have `uv`? You can also run `pip install wavoice` and use `wavoice` directly).*
@@ -186,7 +186,9 @@ if __name__ == "__main__":
   ```bash
   wavoice start --public-url https://voice.yourdomain.com
   # or
-  wavoice livekit dev --public-url https://voice.yourdomain.com
+  wavoice livekit start --public-url https://voice.yourdomain.com
+  # or
+  wavoice retell start --public-url https://voice.yourdomain.com
   ```
 - **Dograh Cloud**: If you use `wavoice dograh setup`, calls route directly to Dograh's cloud infrastructure—no local process or tunnel is needed.
 
@@ -199,13 +201,14 @@ if __name__ == "__main__":
 
 | Command | What it does |
 | :--- | :--- |
-| `wavoice init` | Complete setup wizard: prompts for credentials, turns on calling, and starts the Gemini voice agent. |
-| `wavoice start` | Starts the local server and begins taking calls with the built-in Gemini agent. |
+| `wavoice setup` (or `init`) | Complete setup wizard: prompts for credentials, turns on calling, and starts the Gemini voice agent. |
+| `wavoice start` (or `dev`) | Starts the local server and begins taking calls with the built-in Gemini agent. |
 | `wavoice doctor` | Checks your Meta credentials, calling status, and webhook health. |
-| `wavoice retell start` | Connects incoming WhatsApp calls directly to your Retell AI agent. |
+| `wavoice retell setup` | Connects your WhatsApp number to Retell AI. |
+| `wavoice retell start` (or `dev`) | Connects incoming WhatsApp calls directly to your Retell AI agent. |
 | `wavoice retell doctor` | Checks your Retell API key and agent connection health. |
 | `wavoice livekit setup` | Connects your WhatsApp number to LiveKit Cloud. |
-| `wavoice livekit dev` | Runs the LiveKit webhook bridge and starts testing calls. |
+| `wavoice livekit start` (or `dev`) | Runs the LiveKit webhook bridge and starts testing calls. |
 | `wavoice livekit doctor` | Checks your LiveKit Cloud credentials and connection. |
 | `wavoice dograh setup` | Connects WhatsApp directly to Dograh visual studio in the cloud. |
 | `wavoice dograh doctor` | Checks your Dograh API key and telephony sync. |

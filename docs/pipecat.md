@@ -21,7 +21,7 @@ Build highly customizable, multi-model real-time voice pipelines on WhatsApp wit
 For ~300ms latency without any pipeline code, WAVoice includes a built-in Gemini Multimodal Live agent:
 
 ```bash
-uvx wavoice init
+uvx wavoice setup
 # or: wavoice start
 ```
 

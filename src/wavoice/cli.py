@@ -24,7 +24,7 @@ cli = typer.Typer(
 console = Console()
 
 BANNER_HEADER = """
-[bold cyan]╦ ╦╔═╗╦  ╦╔═╗╦╔═╗╔═╗[/bold cyan]   [bold green]WAVoice[/bold green] [dim]v0.4.0[/dim]
+[bold cyan]╦ ╦╔═╗╦  ╦╔═╗╦╔═╗╔═╗[/bold cyan]   [bold green]WAVoice[/bold green] [dim]v0.4.2[/dim]
 [bold cyan]║║║╠═╣╚╗╔╝║ ║║║  ║╣ [/bold cyan]   [dim]One-command WhatsApp Voice AI runtime[/dim]
 [bold cyan]╚╩╝╩ ╩ ╚╝ ╚═╝╩╚═╝╚═╝[/bold cyan]
 """
@@ -200,7 +200,16 @@ WAVOICE_TELEMETRY={'true' if telemetry_enabled else 'false'}
         app = WhatsAppVoiceApp(config=Settings())
         app.run(tunnel=True, port=settings.port)
     else:
-        console.print("\nRun [cyan]wavoice start[/cyan] whenever you are ready to launch!")
+        console.print("\nRun [cyan]wavoice start[/cyan] (or [cyan]wavoice dev[/cyan]) whenever you are ready to launch!")
+
+
+@cli.command(name="setup")
+def setup(
+    launch: bool = typer.Option(False, "--launch", "-l", help="Automatically start the server after setup"),
+    no_telemetry: bool = typer.Option(False, "--no-telemetry", help="Opt out of anonymous usage telemetry"),
+):
+    """Interactive wizard: input credentials, auto-discover IDs, configure Meta, and launch (alias for 'init')."""
+    init(launch=launch, no_telemetry=no_telemetry)
 
 
 @cli.command()
@@ -312,6 +321,15 @@ def start(
     no_telemetry: bool = typer.Option(False, "--no-telemetry", help="Opt out of anonymous usage telemetry"),
 ):
     """Start the WhatsApp Voice AI server and launch the default voice agent."""
+    if not (settings.whatsapp_token and (settings.gemini_api_key or os.getenv("GEMINI_API_KEY"))):
+        console.print("[bold red]❌ Credentials missing![/bold red]")
+        console.print("[yellow]WHATSAPP_TOKEN or GEMINI_API_KEY is not configured in your .env[/yellow]\n")
+        should_setup = typer.confirm("Would you like to run 'wavoice setup' now?", default=True)
+        if should_setup:
+            init()
+            return
+        raise typer.Exit(1)
+
     console.print(BANNER_HEADER)
     console.print(
         Panel.fit(
@@ -331,6 +349,16 @@ def start(
     from wavoice.sdk import WhatsAppVoiceApp
     app = WhatsAppVoiceApp()
     app.run(tunnel=not no_tunnel, port=port)
+
+
+@cli.command(name="dev")
+def dev(
+    port: int = typer.Option(8000, "--port", "-p", help="Local server port"),
+    no_tunnel: bool = typer.Option(False, "--no-tunnel", help="Disable automated Cloudflare tunnel"),
+    no_telemetry: bool = typer.Option(False, "--no-telemetry", help="Opt out of anonymous usage telemetry"),
+):
+    """Start the WhatsApp Voice AI server and launch the default voice agent (alias for 'start')."""
+    start(port=port, no_tunnel=no_tunnel, no_telemetry=no_telemetry)
 
 
 dograh_cli = typer.Typer(
@@ -961,7 +989,7 @@ def livekit_setup(
     console.print(
         Panel.fit(
             f"[bold green]📞 Ready to Talk![/bold green]\n"
-            f"Run [cyan]wavoice livekit dev[/cyan] to launch the bridge & start talking to your LiveKit AI agent!",
+            f"Run [cyan]wavoice livekit start[/cyan] (or [cyan]wavoice livekit dev[/cyan]) to launch the bridge & start talking to your LiveKit AI agent!",
             border_style="green",
         )
     )
@@ -973,6 +1001,26 @@ def livekit_setup(
         from wavoice.providers.livekit.runtime import LiveKitRuntime
         runtime = LiveKitRuntime(config=Settings())
         runtime.run(tunnel=not bool(chosen_public_url), custom_url=chosen_public_url)
+
+
+@livekit_cli.command(name="start")
+def livekit_start(
+    port: int = typer.Option(8000, "--port", "-p", help="Local webhook server port"),
+    no_tunnel: bool = typer.Option(False, "--no-tunnel", help="Disable automated Cloudflare tunnel"),
+    public_url: Optional[str] = typer.Option(None, "--public-url", help="Custom public HTTPS URL (skips tunnel)"),
+    agent_name: Optional[str] = typer.Option(None, "--agent-name", "-a", help="Target LiveKit agent name (defaults to wavoice-agent or LIVEKIT_AGENT_NAME)"),
+    no_agent: bool = typer.Option(False, "--no-agent", help="Do not run bundled test agent worker (use your own LiveKit agent)"),
+    no_telemetry: bool = typer.Option(False, "--no-telemetry", help="Opt out of anonymous usage telemetry"),
+):
+    """Start the LiveKit WhatsApp bridge (alias for 'wavoice livekit dev')."""
+    livekit_dev(
+        port=port,
+        no_tunnel=no_tunnel,
+        public_url=public_url,
+        agent_name=agent_name,
+        no_agent=no_agent,
+        no_telemetry=no_telemetry,
+    )
 
 
 @livekit_cli.command(name="dev")
@@ -1092,6 +1140,7 @@ def retell_setup(
     token: Optional[str] = typer.Option(None, "--token", "-t", help="Meta System User Access Token"),
     phone_id: Optional[str] = typer.Option(None, "--phone-id", "-p", help="WhatsApp Business Phone Number ID"),
     sip_domain: str = typer.Option("sip.cloudonix.io", "--sip-domain", help="SIP Gateway Domain"),
+    launch: bool = typer.Option(False, "--launch", "-l", help="Automatically start the bridge server after setup"),
     no_telemetry: bool = typer.Option(False, "--no-telemetry", help="Opt out of anonymous usage telemetry"),
 ):
     """One-command setup: connects WhatsApp to Retell AI voice agents via SIP."""
@@ -1192,20 +1241,34 @@ def retell_setup(
             console.print(f"[red]✗ Setup failed:[/red] {e}")
             raise typer.Exit(1)
 
+    # Save to .env
+    _update_env({
+        "RETELL_API_KEY": active_api_key,
+        "RETELL_AGENT_ID": active_agent_id,
+        "WHATSAPP_TOKEN": meta_token,
+        "WHATSAPP_PHONE_NUMBER_ID": disc_phone,
+    })
+    console.print("\n[bold green]✓ Configuration saved to .env![/bold green]")
+
     console.print()
     console.print(
         Panel.fit(
             f"[bold green]🎉 Retell AI WhatsApp Voice Setup Complete![/bold green]\n\n"
             f"[bold white]Phone Number:[/bold white] {display_phone}\n"
-            f"[bold white]Retell Agent:[/bold white] {agent_name} ({active_agent_id})\n"
-            f"[bold white]SIP Gateway:[/bold white] {sip_domain}:5061\n\n"
-            f"[dim]Whenever a customer calls your WhatsApp number, Meta routes the call over SIP\n"
-            f"directly to Retell AI. WAVoice has completed setup and exited.[/dim]",
+            f"[bold white]Retell Agent:[/bold white] {agent_name} ({active_agent_id})\n\n"
+            f"[dim]Run [cyan]wavoice retell start[/cyan] (or [cyan]wavoice retell dev[/cyan]) to begin taking calls![/dim]",
             border_style="green",
         )
     )
     track_event("retell_setup_completed")
     console.print(CREDITS_FOOTER)
+
+    should_launch = launch or typer.confirm("Do you want to start the Retell AI bridge server now?", default=True)
+    if should_launch:
+        from wavoice.core.config import Settings
+        from wavoice.providers.retell.runtime import RetellRuntime
+        runtime = RetellRuntime(config=Settings())
+        runtime.run()
 
 
 @retell_cli.command(name="doctor")
@@ -1240,6 +1303,7 @@ def setup_retell_alias(
     token: Optional[str] = typer.Option(None, "--token", "-t", help="Meta System User Access Token"),
     phone_id: Optional[str] = typer.Option(None, "--phone-id", "-p", help="WhatsApp Business Phone Number ID"),
     sip_domain: str = typer.Option("sip.cloudonix.io", "--sip-domain", help="SIP Gateway Domain"),
+    launch: bool = typer.Option(False, "--launch", "-l", help="Automatically start the bridge server after setup"),
     no_telemetry: bool = typer.Option(False, "--no-telemetry", help="Opt out of anonymous usage telemetry"),
 ):
     """Alias for 'wavoice retell setup'."""
@@ -1249,6 +1313,7 @@ def setup_retell_alias(
         token=token,
         phone_id=phone_id,
         sip_domain=sip_domain,
+        launch=launch,
         no_telemetry=no_telemetry,
     )
 
@@ -1266,6 +1331,17 @@ def retell_start(
     from wavoice.core.telemetry import track_event
     track_event("retell_start_server", {"tunnel": not no_tunnel, "port": port})
 
+    from wavoice.core.config import Settings
+    cfg = Settings()
+    if not (cfg.retell_api_key and cfg.whatsapp_token and (cfg.whatsapp_phone_number_id or os.getenv("WHATSAPP_PHONE_NUMBER_ID"))):
+        console.print("[bold red]❌ Retell credentials missing![/bold red]")
+        console.print("[yellow]RETELL_API_KEY, WHATSAPP_TOKEN, or WHATSAPP_PHONE_NUMBER_ID are not configured in your .env[/yellow]\n")
+        should_setup = typer.confirm("Would you like to run 'wavoice retell setup' now?", default=True)
+        if should_setup:
+            retell_setup()
+            return
+        raise typer.Exit(1)
+
     console.print(BANNER_HEADER)
     console.print(
         Panel.fit(
@@ -1277,15 +1353,25 @@ def retell_start(
     console.print(CREDITS_FOOTER)
     console.print()
 
-    from wavoice.core.config import Settings
     from wavoice.providers.retell.runtime import RetellRuntime
 
-    runtime = RetellRuntime(config=Settings())
+    runtime = RetellRuntime(config=cfg)
     runtime.run(
         port=port,
         tunnel=not no_tunnel,
         custom_url=custom_url,
     )
+
+
+@retell_cli.command(name="dev")
+def retell_dev(
+    port: int = typer.Option(8000, "--port", "-p", help="Local server port"),
+    no_tunnel: bool = typer.Option(False, "--no-tunnel", help="Disable automated Cloudflare tunnel"),
+    custom_url: Optional[str] = typer.Option(None, "--custom-url", help="Custom public HTTPS URL"),
+    no_telemetry: bool = typer.Option(False, "--no-telemetry", help="Opt out of anonymous usage telemetry"),
+):
+    """Start local WhatsApp <-> Retell AI WebRTC Bridge (alias for 'wavoice retell start')."""
+    retell_start(port=port, no_tunnel=no_tunnel, custom_url=custom_url, no_telemetry=no_telemetry)
 
 
 if __name__ == "__main__":
